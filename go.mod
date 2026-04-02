@@ -1,4 +1,4 @@
-module spycode
+module tae
 
 go 1.25.4
 

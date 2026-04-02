@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"spycode/internal/storage"
+	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
 )

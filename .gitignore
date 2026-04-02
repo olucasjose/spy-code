@@ -1,6 +1,6 @@
 # Binários Compilados
 # O nome do seu executável (baseado no seu 'module spycode')
-spycode
+tae
 *.exe
 *.exe~
 *.dll

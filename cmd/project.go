@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"spycode/internal/storage"
+	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
@@ -12,7 +12,7 @@ import (
 
 var projectCmd = &cobra.Command{
 	Use:   "project",
-	Short: "Gerencia os projetos monitorados pelo Spycode",
+	Short: "Gerencia os projetos monitorados pelo Tae",
 }
 
 var projectCreateCmd = &cobra.Command{

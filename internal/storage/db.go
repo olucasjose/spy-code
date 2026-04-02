@@ -20,12 +20,12 @@ func getDBPath() (string, error) {
 		return "", fmt.Errorf("falha ao localizar diretório home: %w", err)
 	}
 	
-	dir := filepath.Join(home, ".spycode")
+	dir := filepath.Join(home, ".tae")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("falha ao criar diretório base: %w", err)
 	}
 	
-	return filepath.Join(dir, "spycode.db"), nil
+	return filepath.Join(dir, "tae.db"), nil
 }
 
 // Open inicia a conexão com o bbolt e garante a existência dos buckets

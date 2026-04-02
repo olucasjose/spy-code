@@ -23,7 +23,7 @@ func TrackPath(projectName, targetPath string) error {
 	return db.Update(func(tx *bbolt.Tx) error {
 		projBucket := tx.Bucket([]byte(BucketProjects))
 		if projBucket.Get([]byte(projectName)) == nil {
-			return fmt.Errorf("projeto '%s' não existe. Crie-o primeiro com 'spycode project create'", projectName)
+			return fmt.Errorf("projeto '%s' não existe. Crie-o primeiro com 'tae project create'", projectName)
 		}
 
 		filesBucket := tx.Bucket([]byte(BucketFiles))

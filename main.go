@@ -1,6 +1,6 @@
 package main
 
-import "spycode/cmd"
+import "tae/cmd"
 
 func main() {
 	cmd.Execute()

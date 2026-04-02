@@ -8,18 +8,18 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "spycode",
-	Short: "Spycode é um utilitário CLI para extração e empacotamento de código",
+	Use:   "tae",
+	Short: "Tae é um utilitário CLI para extração e empacotamento de código",
 	Long: `Uma ferramenta modular para gerenciar, rastrear e extrair arquivos de projetos de forma inteligente.
 
 Dicas de Autocompletar:
 Para habilitar o [TAB] no terminal, gere o script correspondente ao seu shell.
 Exemplo Linux (Bash):
-  sudo spycode completion bash -o /etc/bash_completion.d/spycode
+  sudo tae completion bash -o /etc/bash_completion.d/tae
   exec bash
 
 Exemplo Termux (Android):
-  spycode completion bash > /data/data/com.termux/files/usr/etc/bash_completion.d/spycode
+  tae completion bash > /data/data/com.termux/files/usr/etc/bash_completion.d/tae
   exit (Reinicie a sessão do terminal completamente)`,
 }
 
