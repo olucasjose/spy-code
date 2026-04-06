@@ -17,16 +17,14 @@ import (
 
 var exportCmd = &cobra.Command{
 	Use:   "export <nome da tag> <destino>",
-	Short: "Exporta os arquivos monitorados para um diretório de destino",
+	Short: "Exporta os arquivos e diretórios monitorados para um destino",
 	Args:  cobra.ExactArgs(2),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			// Argumento 0: Autocompleta apenas nomes de tags
 			tags, _ := storage.GetAllTags()
 			return tags, cobra.ShellCompDirectiveNoFileComp
 		}
 		if len(args) == 1 {
-			// Argumento 1: Autocompleta apenas diretórios (pastas de destino)
 			return nil, cobra.ShellCompDirectiveFilterDirs
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -48,7 +46,7 @@ var exportCmd = &cobra.Command{
 
 		basePrefix := getCommonPrefix(files)
 		numWorkers := runtime.NumCPU()
-		fmt.Printf("Iniciando exportação de %d arquivo(s) para '%s' com %d worker(s)...\n", len(files), destPath, numWorkers)
+		fmt.Printf("Iniciando exportação de %d alvo(s) para '%s' com %d worker(s)...\n", len(files), destPath, numWorkers)
 
 		jobs := make(chan string, len(files))
 		var wg sync.WaitGroup
@@ -111,15 +109,46 @@ func worker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string) {
 
 		targetPath := filepath.Join(dest, relPath)
 
-		if err := copyFile(path, targetPath); err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao copiar %s: %v\n", path, err)
+		if err := processPath(path, targetPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao exportar %s: %v\n", path, err)
 		} else {
 			fmt.Printf("  -> %s\n", targetPath)
 		}
 	}
 }
 
-func copyFile(src, dst string) error {
+// processPath decide se o alvo é arquivo ou diretório e faz o roteamento
+func processPath(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if info.IsDir() {
+		return filepath.Walk(src, func(path string, f os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			
+			relPath, err := filepath.Rel(src, path)
+			if err != nil {
+				return err
+			}
+			
+			targetPath := filepath.Join(dst, relPath)
+
+			if f.IsDir() {
+				return os.MkdirAll(targetPath, 0755)
+			}
+			return copySingleFile(path, targetPath)
+		})
+	}
+
+	return copySingleFile(src, dst)
+}
+
+// copySingleFile lida exclusivamente com I/O de arquivos comuns
+func copySingleFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return err
