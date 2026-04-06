@@ -13,11 +13,13 @@ var trackCmd = &cobra.Command{
 	Use:   "track <arquivo1> [arquivo2...] <nome da tag>",
 	Short: "Adiciona um ou mais arquivos/diretórios ao monitoramento de uma tag",
 	Args:  cobra.MinimumNArgs(2),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		tags, _ := storage.GetAllTags()
+		// ShellCompDirectiveDefault permite que o bash sugira arquivos locais E as nossas tags
+		return tags, cobra.ShellCompDirectiveDefault 
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		// O último argumento é sempre a tag
 		tagName := args[len(args)-1]
-		
-		// Todos os argumentos antes da tag são os arquivos
 		targets := args[:len(args)-1]
 
 		for _, target := range targets {

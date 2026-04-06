@@ -57,3 +57,25 @@ func Open() (*bbolt.DB, error) {
 
 	return db, nil
 }
+
+// GetAllTags retorna uma lista com os nomes de todas as tags cadastradas no banco
+func GetAllTags() ([]string, error) {
+	db, err := Open()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	var tags []string
+	err = db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(BucketTags))
+		if b == nil {
+			return nil
+		}
+		return b.ForEach(func(k, v []byte) error {
+			tags = append(tags, string(k))
+			return nil
+		})
+	})
+	return tags, err
+}

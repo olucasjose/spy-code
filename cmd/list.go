@@ -14,6 +14,13 @@ var listCmd = &cobra.Command{
 	Use:   "list [nome da tag]",
 	Short: "Lista todas as tags ou os arquivos rastreados de uma tag específica",
 	Args:  cobra.MaximumNArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp // Sem sugestão após a primeira tag
+		}
+		tags, _ := storage.GetAllTags()
+		return tags, cobra.ShellCompDirectiveNoFileComp // Retorna tags sem arquivos do disco
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		db, err := storage.Open()
 		if err != nil {

@@ -19,6 +19,18 @@ var exportCmd = &cobra.Command{
 	Use:   "export <nome da tag> <destino>",
 	Short: "Exporta os arquivos monitorados para um diretório de destino",
 	Args:  cobra.ExactArgs(2),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			// Argumento 0: Autocompleta apenas nomes de tags
+			tags, _ := storage.GetAllTags()
+			return tags, cobra.ShellCompDirectiveNoFileComp
+		}
+		if len(args) == 1 {
+			// Argumento 1: Autocompleta apenas diretórios (pastas de destino)
+			return nil, cobra.ShellCompDirectiveFilterDirs
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		tagName := args[0]
 		destPath := args[1]

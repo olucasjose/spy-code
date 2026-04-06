@@ -1,5 +1,5 @@
 # Binários Compilados
-# O nome do seu executável (baseado no seu 'module spycode')
+# O nome do seu executável (baseado no seu 'module tae')
 tae
 *.exe
 *.exe~
@@ -15,4 +15,5 @@ tae
 
 # Arquivos de Log e Temporários
 *.log
+*.diff
 vendor/

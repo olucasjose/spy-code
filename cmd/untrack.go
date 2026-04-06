@@ -13,6 +13,10 @@ var untrackCmd = &cobra.Command{
 	Use:   "untrack <arquivo1> [arquivo2...] <nome da tag>",
 	Short: "Remove um ou mais arquivos/diretórios do monitoramento de uma tag",
 	Args:  cobra.MinimumNArgs(2),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		tags, _ := storage.GetAllTags()
+		return tags, cobra.ShellCompDirectiveDefault
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		tagName := args[len(args)-1]
 		targets := args[:len(args)-1]
