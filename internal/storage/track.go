@@ -7,7 +7,8 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-// TrackPath converte o caminho para absoluto e o insere no sub-bucket da tag
+// TrackPath converte o caminho para absoluto e o insere no sub-bucket da tag.
+// Se a tag não existir, ela será criada automaticamente (on the fly).
 func TrackPath(tagName, targetPath string) error {
 	db, err := Open()
 	if err != nil {
@@ -22,19 +23,21 @@ func TrackPath(tagName, targetPath string) error {
 
 	return db.Update(func(tx *bbolt.Tx) error {
 		projBucket := tx.Bucket([]byte(BucketTags))
+		
+		// Verificação e auto-criação silenciosa
 		if projBucket.Get([]byte(tagName)) == nil {
-			return fmt.Errorf("tag '%s' não existe. Crie-a primeiro com 'tae tag create'", tagName)
+			if err := projBucket.Put([]byte(tagName), []byte("{}")); err != nil {
+				return fmt.Errorf("falha ao criar tag '%s' automaticamente: %w", tagName, err)
+			}
 		}
 
 		filesBucket := tx.Bucket([]byte(BucketFiles))
 		
-		// Cria um bucket aninhado com o nome da tag
 		projFiles, err := filesBucket.CreateBucketIfNotExists([]byte(tagName))
 		if err != nil {
 			return fmt.Errorf("falha ao estruturar bucket da tag: %w", err)
 		}
 
-		// O valor vazio ("1") é um placeholder. No futuro, armazenaremos hashes aqui.
 		return projFiles.Put([]byte(absPath), []byte("1"))
 	})
 }
