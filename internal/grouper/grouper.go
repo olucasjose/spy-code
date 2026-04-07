@@ -101,39 +101,49 @@ func GroupFiles(files []string, limit int, baseName string, merge bool) []Export
 	return exports
 }
 
-// mergeBlocks aplica a heurística Next-Fit em pós-processamento preservando limites e nomes
+// mergeBlocks aplica a heurística First-Fit Decreasing (FFD) global.
 func mergeBlocks(chunks []ExportChunk, limit int, baseName string) []ExportChunk {
 	if len(chunks) <= 1 {
 		return chunks
 	}
 
-	var merged []ExportChunk
-	current := chunks[0]
+	// Ordena os blocos do maior para o menor peso para garantir a compactação ótima
+	sortedChunks := make([]ExportChunk, len(chunks))
+	copy(sortedChunks, chunks)
+	sort.Slice(sortedChunks, func(i, j int) bool {
+		return len(sortedChunks[i].Files) > len(sortedChunks[j].Files)
+	})
 
+	var bins []ExportChunk
 	stripZip := func(s string) string { return strings.TrimSuffix(s, ".zip") }
 
-	for i := 1; i < len(chunks); i++ {
-		next := chunks[i]
-		
-		if len(current.Files)+len(next.Files) <= limit {
-			current.Files = append(current.Files, next.Files...)
-			
-			cName := stripZip(current.ZipName)
-			nName := stripZip(next.ZipName)
-			
-			// Sanitiza o prefixo base para o nome final não ficar colossal
-			cleanNext := strings.TrimPrefix(nName, baseName+"_")
-			if cleanNext == baseName {
-				cleanNext = "root"
+	for _, chunk := range sortedChunks {
+		placed := false
+		for i := range bins {
+			if len(bins[i].Files)+len(chunk.Files) <= limit {
+				// Encaixa no lote (bin) existente
+				bins[i].Files = append(bins[i].Files, chunk.Files...)
+				
+				cName := stripZip(bins[i].ZipName)
+				nName := stripZip(chunk.ZipName)
+				
+				cleanNext := strings.TrimPrefix(nName, baseName+"_")
+				if cleanNext == baseName {
+					cleanNext = "root"
+				}
+				bins[i].ZipName = fmt.Sprintf("%s+%s.zip", cName, cleanNext)
+				
+				placed = true
+				break
 			}
-			current.ZipName = fmt.Sprintf("%s+%s.zip", cName, cleanNext)
-		} else {
-			merged = append(merged, current)
-			current = next
+		}
+		// Se não coube em nenhum bin existente, cria um novo
+		if !placed {
+			bins = append(bins, chunk)
 		}
 	}
-	merged = append(merged, current)
-	return merged
+
+	return bins
 }
 
 func formatChunkNames(chunks []*Chunk) []ExportChunk {
