@@ -7,11 +7,18 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
+
+	"tae/internal/grouper"
 
 	"github.com/spf13/cobra"
 )
+
+var diffLimit int
 
 var diffZipCmd = &cobra.Command{
 	Use:   "diff-zip <commit1> <commit2>",
@@ -24,11 +31,39 @@ var diffZipCmd = &cobra.Command{
 		fmt.Printf("Comparando %s -> %s\n\n", commit1, commit2)
 
 		files := getChangedFiles(commit1, commit2)
-		createZip(files)
+		if len(files) == 0 {
+			fmt.Println("\nNenhum arquivo encontrado para compactar no disco.")
+			os.Exit(0)
+		}
+
+		timestamp := time.Now().Format("20060102_150405")
+		baseName := fmt.Sprintf("git_changes_%s", timestamp)
+		basePrefix := getCommonPrefix(files)
+
+		chunks := grouper.GroupFiles(files, diffLimit, baseName)
+		fmt.Printf("\nIniciando empacotamento de %d arquivo(s) em %d lote(s)...\n", len(files), len(chunks))
+
+		numWorkers := runtime.NumCPU()
+		jobs := make(chan grouper.ExportChunk, len(chunks))
+		var wg sync.WaitGroup
+
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go diffWorker(jobs, &wg, basePrefix)
+		}
+
+		for _, c := range chunks {
+			jobs <- c
+		}
+		close(jobs)
+		wg.Wait()
+
+		fmt.Printf("\nSucesso! %d arquivo(s) zip gerado(s) no diretório atual.\n", len(chunks))
 	},
 }
 
 func init() {
+	diffZipCmd.Flags().IntVarP(&diffLimit, "limit", "l", 0, "Teto máximo de arquivos por zip")
 	rootCmd.AddCommand(diffZipCmd)
 }
 
@@ -87,63 +122,62 @@ func getChangedFiles(c1, c2 string) []string {
 	return filesToZip
 }
 
-func createZip(files []string) {
-	if len(files) == 0 {
-		fmt.Println("\nNenhum arquivo encontrado para compactar no disco.")
-		return
+func diffWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix string) {
+	defer wg.Done()
+	for chunk := range jobs {
+		if err := buildZipChunk(chunk.ZipName, chunk.Files, basePrefix); err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao criar %s: %v\n", chunk.ZipName, err)
+		} else {
+			fmt.Printf("  -> %s gerado (%d arquivos)\n", chunk.ZipName, len(chunk.Files))
+		}
 	}
+}
 
-	fmt.Printf("\n%d arquivo(s) para compactar.\n", len(files))
-
-	timestamp := time.Now().Format("20060102_150405")
-	zipName := fmt.Sprintf("git_changes_%s.zip", timestamp)
-
-	fmt.Printf("Criando %s...\n", zipName)
-
-	zipFile, err := os.Create(zipName)
+func buildZipChunk(zipPath string, files []string, basePrefix string) error {
+	zipFile, err := os.Create(zipPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "\nErro de I/O ao criar o arquivo zip: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	defer zipFile.Close()
 
 	archive := zip.NewWriter(zipFile)
 	defer archive.Close()
 
-	for _, file := range files {
-		if err := addFileToZip(archive, file); err != nil {
-			fmt.Fprintf(os.Stderr, "Aviso: falha ao adicionar %s ao zip: %v\n", file, err)
+	for _, path := range files {
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() {
+			continue
+		}
+
+		relPath := strings.TrimPrefix(path, basePrefix)
+		relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
+		if relPath == "" {
+			relPath = filepath.Base(path)
+		}
+		relPath = filepath.ToSlash(relPath)
+
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+		header.Name = relPath
+		header.Method = zip.Deflate
+
+		writer, err := archive.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+
+		fileToZip, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(writer, fileToZip)
+		fileToZip.Close()
+		if err != nil {
+			return err
 		}
 	}
-
-	fmt.Printf("\nSucesso! %s criado com %d arquivo(s).\n", zipName, len(files))
-}
-
-func addFileToZip(zipWriter *zip.Writer, filename string) error {
-	fileToZip, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer fileToZip.Close()
-
-	info, err := fileToZip.Stat()
-	if err != nil {
-		return err
-	}
-
-	header, err := zip.FileInfoHeader(info)
-	if err != nil {
-		return err
-	}
-
-	header.Name = filename
-	header.Method = zip.Deflate
-
-	writer, err := zipWriter.CreateHeader(header)
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(writer, fileToZip)
-	return err
+	return nil
 }
