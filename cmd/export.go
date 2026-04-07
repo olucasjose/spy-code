@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"archive/zip"
 	"fmt"
 	"io"
 	"os"
@@ -9,10 +10,16 @@ import (
 	"strings"
 	"sync"
 
+	"tae/internal/grouper"
 	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
+)
+
+var (
+	exportZip   bool
+	exportLimit int
 )
 
 var exportCmd = &cobra.Command{
@@ -33,9 +40,16 @@ var exportCmd = &cobra.Command{
 		tagName := args[0]
 		destPath := args[1]
 
-		files := getTagFiles(tagName)
+		rawFiles := getTagFiles(tagName)
+		if len(rawFiles) == 0 {
+			fmt.Printf("A tag '%s' não possui alvos rastreados ou não existe.\n", tagName)
+			os.Exit(1)
+		}
+
+		// Pré-processamento: expande pastas em arquivos reais e deduplica
+		files := expandPathsToFiles(rawFiles)
 		if len(files) == 0 {
-			fmt.Printf("A tag '%s' não possui arquivos rastreados ou não existe.\n", tagName)
+			fmt.Println("Erro: Nenhum arquivo válido encontrado nos alvos rastreados.")
 			os.Exit(1)
 		}
 
@@ -46,27 +60,51 @@ var exportCmd = &cobra.Command{
 
 		basePrefix := getCommonPrefix(files)
 		numWorkers := runtime.NumCPU()
-		fmt.Printf("Iniciando exportação de %d alvo(s) para '%s' com %d worker(s)...\n", len(files), destPath, numWorkers)
 
-		jobs := make(chan string, len(files))
-		var wg sync.WaitGroup
+		if exportZip {
+			chunks := grouper.GroupFiles(files, exportLimit, tagName)
+			fmt.Printf("Iniciando exportação em ZIP. %d arquivo(s) expandido(s) divididos em %d lote(s) para '%s'...\n", len(files), len(chunks), destPath)
 
-		for i := 0; i < numWorkers; i++ {
-			wg.Add(1)
-			go worker(jobs, &wg, basePrefix, destPath)
+			jobs := make(chan grouper.ExportChunk, len(chunks))
+			var wg sync.WaitGroup
+
+			for i := 0; i < numWorkers; i++ {
+				wg.Add(1)
+				go zipWorker(jobs, &wg, basePrefix, destPath)
+			}
+
+			for _, c := range chunks {
+				jobs <- c
+			}
+			close(jobs)
+			wg.Wait()
+
+			fmt.Printf("\nSucesso! %d arquivo(s) zip gerado(s) na pasta '%s'.\n", len(chunks), destPath)
+		} else {
+			fmt.Printf("Iniciando exportação plana de %d arquivo(s) para '%s' com %d worker(s)....\n", len(files), destPath, numWorkers)
+
+			jobs := make(chan string, len(files))
+			var wg sync.WaitGroup
+
+			for i := 0; i < numWorkers; i++ {
+				wg.Add(1)
+				go flatWorker(jobs, &wg, basePrefix, destPath)
+			}
+
+			for _, file := range files {
+				jobs <- file
+			}
+			close(jobs)
+			wg.Wait()
+
+			fmt.Printf("\nSucesso! Arquivos exportados para a pasta '%s'.\n", destPath)
 		}
-
-		for _, file := range files {
-			jobs <- file
-		}
-		close(jobs)
-
-		wg.Wait()
-		fmt.Printf("\nSucesso! Arquivos exportados para a pasta '%s'.\n", destPath)
 	},
 }
 
 func init() {
+	exportCmd.Flags().BoolVarP(&exportZip, "zip", "z", false, "Exporta e compacta os arquivos em formato .zip")
+	exportCmd.Flags().IntVarP(&exportLimit, "limit", "l", 0, "Teto máximo de arquivos por zip (requer -z)")
 	rootCmd.AddCommand(exportCmd)
 }
 
@@ -97,7 +135,103 @@ func getTagFiles(tagName string) []string {
 	return files
 }
 
-func worker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string) {
+// expandPathsToFiles converte diretórios rastreados em uma lista plana de arquivos absolutos, evitando duplicações.
+func expandPathsToFiles(paths []string) []string {
+	uniqueFiles := make(map[string]bool)
+	var expanded []string
+
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue // Ignora alvos que foram deletados do disco
+		}
+
+		if !info.IsDir() {
+			if !uniqueFiles[p] {
+				uniqueFiles[p] = true
+				expanded = append(expanded, p)
+			}
+			continue
+		}
+
+		filepath.Walk(p, func(path string, f os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if !f.IsDir() {
+				if !uniqueFiles[path] {
+					uniqueFiles[path] = true
+					expanded = append(expanded, path)
+				}
+			}
+			return nil
+		})
+	}
+	return expanded
+}
+
+func zipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, dest string) {
+	defer wg.Done()
+	for chunk := range jobs {
+		zipPath := filepath.Join(dest, chunk.ZipName)
+		if err := createZipChunk(zipPath, chunk.Files, basePrefix); err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao criar %s: %v\n", chunk.ZipName, err)
+		} else {
+			fmt.Printf("  -> %s gerado (%d arquivos reais)\n", chunk.ZipName, len(chunk.Files))
+		}
+	}
+}
+
+func createZipChunk(zipPath string, files []string, basePrefix string) error {
+	zipFile, err := os.Create(zipPath)
+	if err != nil {
+		return err
+	}
+	defer zipFile.Close()
+
+	archive := zip.NewWriter(zipFile)
+	defer archive.Close()
+
+	for _, path := range files {
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() {
+			continue
+		}
+
+		relPath := strings.TrimPrefix(path, basePrefix)
+		relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
+		if relPath == "" {
+			relPath = filepath.Base(path)
+		}
+		relPath = filepath.ToSlash(relPath)
+
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+		header.Name = relPath
+		header.Method = zip.Deflate
+
+		writer, err := archive.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+
+		fileToZip, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(writer, fileToZip)
+		fileToZip.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func flatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string) {
 	defer wg.Done()
 	for path := range jobs {
 		relPath := strings.TrimPrefix(path, basePrefix)
@@ -109,7 +243,7 @@ func worker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string) {
 
 		targetPath := filepath.Join(dest, relPath)
 
-		if err := processPath(path, targetPath); err != nil {
+		if err := copySingleFile(path, targetPath); err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao exportar %s: %v\n", path, err)
 		} else {
 			fmt.Printf("  -> %s\n", targetPath)
@@ -117,37 +251,6 @@ func worker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string) {
 	}
 }
 
-// processPath decide se o alvo é arquivo ou diretório e faz o roteamento
-func processPath(src, dst string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-
-	if info.IsDir() {
-		return filepath.Walk(src, func(path string, f os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			
-			relPath, err := filepath.Rel(src, path)
-			if err != nil {
-				return err
-			}
-			
-			targetPath := filepath.Join(dst, relPath)
-
-			if f.IsDir() {
-				return os.MkdirAll(targetPath, 0755)
-			}
-			return copySingleFile(path, targetPath)
-		})
-	}
-
-	return copySingleFile(src, dst)
-}
-
-// copySingleFile lida exclusivamente com I/O de arquivos comuns
 func copySingleFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
 	if err != nil {
