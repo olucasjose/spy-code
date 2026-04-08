@@ -32,21 +32,18 @@ Exemplo Linux (Bash):
 Exemplo Termux (Android):
   tae completion bash > /data/data/com.termux/files/usr/etc/bash_completion.d/tae
   exit (Reinicie a sessão do terminal completamente)`,
-	Example: `  # 1. Cria uma nova tag de agrupamento
-  tae create "patch_v1"
-
-  # 2. Adiciona arquivos à tag (suporta múltiplos alvos e filtro de exclusão)
+	Example: `  # Criar tags e rastrear arquivos
+  tae create "patch_v1" "patch_v2"
   tae track ./src/main.go ./configs/ "patch_v1"
-  tae track ./frontend/ --ignore "node_modules|*.log" "patch_v1"
 
-  # 3. Verifica o que está sendo monitorado
-  tae list "patch_v1"
-
-  # 4. Exporta todos os arquivos agrupados para um diretório
+  # Exportações de Tag
   tae export "patch_v1" ./pasta_de_saida
-  
-  # 5. Exporta empacotando em .zip (fatiando a cada 1000 arquivos)
-  tae export "patch_v1" ./pasta_de_saida --zip --limit 1000`,
+  tae export "patch_v1" ./pasta_de_saida --zip --limit 1000
+
+  # Integrações Git
+  tae git list HEAD
+  tae git export HEAD~1 ./exportacao_commit -z -l 500
+  tae git diff HEAD~2 HEAD -l 100`,
 }
 
 func init() {

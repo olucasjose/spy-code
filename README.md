@@ -48,13 +48,15 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
 
 | Comando | Descrição | Exemplo |
 |---|---|---|
-| `create <tag>` | Cria um novo contexto (tag) vazio no banco de dados. | `tae create refactor_api` |
-| `delete <tag>...` | Remove uma ou mais tags e todo o seu índice de rastreamento. | `tae delete tag1 tag2` |
-| `list [tag]` | Lista todas as tags cadastradas. Se a tag for informada, lista os caminhos rastreados por ela. | `tae list` |
-| `track <alvos> <tag>` | Adiciona arquivos/pastas ao monitoramento da tag. Suporta `-i` (ou `--ignore`) para regex/glob raso. | `tae track ./cmd/ meu_app` |
+| `create <tags>...` | Cria novos contextos (tags) vazios no banco de dados. | `tae create refactor fix` |
+| `delete <tags>...` | Remove uma ou mais tags e todo o seu índice de rastreamento. | `tae delete tag1 tag2` |
+| `list [tag]` | Lista todas as tags cadastradas. Se a tag for informada, lista os caminhos rastreados. | `tae list refactor` |
+| `track <alvos> <tag>` | Adiciona arquivos/pastas ao monitoramento da tag. Suporta filtro de ignorar `-i`. | `tae track ./cmd/ meu_app` |
 | `untrack <alvos> <tag>`| Remove arquivos/pastas específicos do monitoramento de uma tag. | `tae untrack ./cmd/main.go meu_app` |
-| `export <tag> <dest>` | Exporta os arquivos rastreados. Suporta modo ZIP (`-z`) e limitação de lotes (`-l`). | `tae export meu_app ./build -z -l 500` |
-| `diff-zip <c1> <c2>` | Compara dois commits do Git, isola os arquivos modificados/adicionados e empacota em zip no disco. | `tae diff-zip HEAD~1 HEAD -l 100` |
+| `export <tag> <dest>` | Exporta os arquivos rastreados lendo o disco local atual. Suporta `-z` e `-l`. | `tae export meu_app ./build -z` |
+| `git diff <c1> <c2>` | Compara commits e empacota em zip os arquivos alterados (isolado da working tree). | `tae git diff HEAD~1 HEAD -l 100` |
+| `git list <commit>` | Lista todos os arquivos mapeados na árvore de um determinado commit. | `tae git list HEAD` |
+| `git export <c> <dest>`| Exporta a árvore de um commit, extraindo os dados históricos diretos do Git. | `tae git export HEAD~2 ./saida` |
 
 ### Detalhes de Exportação e Zip (`export` / `diff-zip`)
 
