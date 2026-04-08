@@ -44,6 +44,8 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
    tae export patch_1.2 ./saida
    ```
 
+*(Nota: Para verificar a versão atual da CLI, utilize `tae -v` ou `tae --version`)*
+
 ## 🛠️ Referência de Comandos
 
 | Comando | Descrição | Exemplo |
@@ -53,6 +55,7 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
 | `list [tag]` | Lista todas as tags cadastradas. Se a tag for informada, lista os caminhos rastreados. | `tae list refactor` |
 | `track <alvos> <tag>` | Adiciona arquivos/pastas ao monitoramento da tag. Suporta filtro de ignorar `-i`. | `tae track ./cmd/ meu_app` |
 | `untrack <alvos> <tag>`| Remove arquivos/pastas específicos do monitoramento de uma tag. | `tae untrack ./cmd/main.go meu_app` |
+| `prune [tags]...` | Podar arquivos rastreados que não existem mais no disco. Suporta `-a` (todas), `-d` (simulação) e `-V` (detalhado). | `tae prune meu_app -a -d` |
 | `export <tag> <dest>` | Exporta os arquivos rastreados lendo o disco local atual. Suporta `-z` e `-l`. | `tae export meu_app ./build -z` |
 | `git diff <c1> <c2>` | Compara commits e empacota em zip os arquivos alterados (isolado da working tree). | `tae git diff HEAD~1 HEAD -l 100` |
 | `git list <commit>` | Lista todos os arquivos mapeados na árvore de um determinado commit. | `tae git list HEAD` |
