@@ -62,7 +62,10 @@ var gitExportCmd = &cobra.Command{
 		numWorkers := runtime.NumCPU()
 
 		if gitExportZip {
-			chunks := grouper.GroupFiles(files, gitExportLimit, fmt.Sprintf("commit_%s", commit), gitExportMerge)
+			repoName := getGitRepoName()
+			baseName := fmt.Sprintf("%s-%s", repoName, commit)
+
+			chunks := grouper.GroupFiles(files, gitExportLimit, baseName, gitExportMerge)
 			fmt.Printf("Iniciando exportação em ZIP do commit %s. %d arquivo(s) em %d lote(s)...\n", commit, len(files), len(chunks))
 
 			jobs := make(chan grouper.ExportChunk, len(chunks))

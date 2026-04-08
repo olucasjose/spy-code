@@ -40,3 +40,12 @@ func streamGitBlob(commit, path string, dest io.Writer) error {
 	}
 	return nil
 }
+
+// getGitRepoName extrai o nome do diretório raiz do repositório Git atual
+func getGitRepoName() string {
+	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "repo" // Fallback seguro
+	}
+	return filepath.Base(strings.TrimSpace(string(out)))
+}

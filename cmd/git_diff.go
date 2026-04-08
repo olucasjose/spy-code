@@ -40,7 +40,8 @@ var gitDiffCmd = &cobra.Command{
 		}
 
 		timestamp := time.Now().Format("20060102_150405")
-		baseName := fmt.Sprintf("git_changes_%s", timestamp)
+		repoName := getGitRepoName()
+		baseName := fmt.Sprintf("%s-diff-%s", repoName, timestamp)""
 		basePrefix := getCommonPrefix(files)
 
 		chunks := grouper.GroupFiles(files, diffLimit, baseName, diffMerge)
