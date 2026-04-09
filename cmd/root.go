@@ -12,7 +12,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:     "tae",
-	Version: "3.2.0",
+	Version: "4.0.0",
 	Short:   "Tae é um utilitário CLI para extração e empacotamento de código",
 	Long: `Tae (Tracker and Exporter) é uma ferramenta CLI modular para gerenciar, 
 rastrear e extrair arquivos no disco.
@@ -39,8 +39,8 @@ Exemplo Termux (Android):
 
   # Manutenção e Limpeza (Arquivos deletados do disco)
   tae prune "patch_v1"
-  tae prune --all --dry-run
-  tae prune -a -V
+  tae prune --all --list
+  tae prune -a -f -q
 
   # Exportações de Tag
   tae export "patch_v1" ./pasta_de_saida

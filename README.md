@@ -55,7 +55,7 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
 | `list [tag]` | Lista tags cadastradas ou alvos rastreados. Suporta árvore visual (`-t`), limite de nível (`-L`), ignorar padrões (`-I`) e expansão de pastas (`-e`). | `tae list refactor -t -L 2 -e` |
 | `track <alvos> <tag>` | Adiciona arquivos/pastas ao monitoramento da tag. Suporta filtro de ignorar `-i`. | `tae track ./cmd/ meu_app` |
 | `untrack <alvos> <tag>`| Remove arquivos/pastas específicos do monitoramento de uma tag. | `tae untrack ./cmd/main.go meu_app` |
-| `prune [tags]...` | Podar arquivos que não existem mais no disco. Suporta `-a` (todas), `-d` (simulação) e `-V` (detalhado). | `tae prune meu_app -a -d` |
+| `prune [tags]...` | Remove arquivos fantasmas do banco. Exige confirmação por padrão. Suporta listar (`-l`), forçar (`-f`), silencioso (`-q`) e todas as tags (`-a`). | `tae prune -a -f` |
 | `export <tag> <dest>` | Exporta os arquivos rastreados lendo o disco local. Suporta fatiamento em zip (`-z`, `-l`, `-m`). | `tae export meu_app ./build -z` |
 | `git diff <c1> <c2>` | Empacota em zip os arquivos alterados (isolado da working tree). O nome do zip detecta automaticamente o nome do repositório. | `tae git diff HEAD~1 HEAD -l 100` |
 | `git list <commit>` | Lista os arquivos da árvore de um commit. Suporta as mesmas opções visuais do `list` (`-t`, `-L`, `-I`). | `tae git list HEAD -t -L 1` |
