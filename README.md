@@ -52,19 +52,21 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
 |---|---|---|
 | `create <tags>...` | Cria novos contextos (tags) vazios no banco de dados. | `tae create refactor fix` |
 | `delete <tags>...` | Remove uma ou mais tags e todo o seu índice de rastreamento. | `tae delete tag1 tag2` |
-| `list [tag]` | Lista todas as tags cadastradas. Se a tag for informada, lista os caminhos rastreados. | `tae list refactor` |
+| `list [tag]` | Lista tags cadastradas ou alvos rastreados. Suporta árvore visual (`-t`), limite de nível (`-L`), ignorar padrões (`-I`) e expansão de pastas (`-e`). | `tae list refactor -t -L 2 -e` |
 | `track <alvos> <tag>` | Adiciona arquivos/pastas ao monitoramento da tag. Suporta filtro de ignorar `-i`. | `tae track ./cmd/ meu_app` |
 | `untrack <alvos> <tag>`| Remove arquivos/pastas específicos do monitoramento de uma tag. | `tae untrack ./cmd/main.go meu_app` |
-| `prune [tags]...` | Podar arquivos rastreados que não existem mais no disco. Suporta `-a` (todas), `-d` (simulação) e `-V` (detalhado). | `tae prune meu_app -a -d` |
-| `export <tag> <dest>` | Exporta os arquivos rastreados lendo o disco local atual. Suporta `-z` e `-l`. | `tae export meu_app ./build -z` |
-| `git diff <c1> <c2>` | Compara commits e empacota em zip os arquivos alterados (isolado da working tree). | `tae git diff HEAD~1 HEAD -l 100` |
-| `git list <commit>` | Lista todos os arquivos mapeados na árvore de um determinado commit. | `tae git list HEAD` |
-| `git export <c> <dest>`| Exporta a árvore de um commit, extraindo os dados históricos diretos do Git. | `tae git export HEAD~2 ./saida` |
+| `prune [tags]...` | Podar arquivos que não existem mais no disco. Suporta `-a` (todas), `-d` (simulação) e `-V` (detalhado). | `tae prune meu_app -a -d` |
+| `export <tag> <dest>` | Exporta os arquivos rastreados lendo o disco local. Suporta fatiamento em zip (`-z`, `-l`, `-m`). | `tae export meu_app ./build -z` |
+| `git diff <c1> <c2>` | Empacota em zip os arquivos alterados (isolado da working tree). O nome do zip detecta automaticamente o nome do repositório. | `tae git diff HEAD~1 HEAD -l 100` |
+| `git list <commit>` | Lista os arquivos da árvore de um commit. Suporta as mesmas opções visuais do `list` (`-t`, `-L`, `-I`). | `tae git list HEAD -t -L 1` |
+| `git export <c> <dest>`| Exporta a árvore de um commit. Identifica o repositório raiz e gera lotes nomeados de forma inteligente (ex: `meu-repo-HEAD.zip`). | `tae git export v3.2.0 ./saida -z` |
 
-### Detalhes de Exportação e Zip (`export` / `diff-zip`)
+### Detalhes de Exportação e Zip (`export` / `git diff` / `git export`)
 
 Se você trabalhar com milhares de arquivos, os comandos de exportação zipada suportam o fatiamento inteligente de lotes (`--limit` ou `-l`). O algoritmo tenta quebrar os arquivos limitando o total por arquivo `.zip`, separando na raiz dos subdiretórios quando possível.
 Para mesclar lotes que fiquem pequenos demais no final do fatiamento, use a flag `--merge` (`-m`).
+
+Nas integrações do Git (`git export` e `git diff`), o tae extrai automaticamente o nome do repositório raiz atual para nomear os zips gerados, garantindo rastreabilidade dos pacotes.
 
 ## 📄 Licença
 
