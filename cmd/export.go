@@ -14,8 +14,8 @@ import (
 	"sync"
 
 	"tae/internal/grouper"
+	"tae/internal/render"
 	"tae/internal/storage"
-    "tae/internal/render"
 
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
@@ -51,10 +51,16 @@ var exportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Pré-processamento: expande pastas em arquivos reais e deduplica
-		files := expandPathsToFiles(rawFiles)
+		// Carrega a Blacklist em O(1) e passa para o motor de expansão
+		ignoredMap, err := storage.GetIgnoredPaths(tagName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar Exclusion Index: %v\n", err)
+		}
+
+		// Pré-processamento com filtro injetado
+		files := expandPathsToFiles(rawFiles, ignoredMap)
 		if len(files) == 0 {
-			fmt.Println("Erro: Nenhum arquivo válido encontrado nos alvos rastreados.")
+			fmt.Println("Erro: Nenhum arquivo válido encontrado (possivelmente todos foram ignorados).")
 			os.Exit(1)
 		}
 
@@ -141,15 +147,20 @@ func getTagFiles(tagName string) []string {
 	return files
 }
 
-// expandPathsToFiles converte diretórios rastreados em uma lista plana de arquivos absolutos, evitando duplicações.
-func expandPathsToFiles(paths []string) []string {
+// expandPathsToFiles converte diretórios rastreados em uma lista plana de arquivos, respeitando o Exclusion Index.
+func expandPathsToFiles(paths []string, ignored map[string]bool) []string {
 	uniqueFiles := make(map[string]bool)
 	var expanded []string
 
 	for _, p := range paths {
+		// O alvo inteiro foi ignorado?
+		if ignored[p] {
+			continue
+		}
+
 		info, err := os.Stat(p)
 		if err != nil {
-			continue // Ignora alvos que foram deletados do disco
+			continue // Ignora alvos deletados do disco (serão limpos via tae prune)
 		}
 
 		if !info.IsDir() {
@@ -164,6 +175,15 @@ func expandPathsToFiles(paths []string) []string {
 			if err != nil {
 				return nil
 			}
+
+			// Interceptação O(1). Se for pasta, injeta o SkipDir e poupa I/O.
+			if ignored[path] {
+				if f.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
 			if !f.IsDir() {
 				if !uniqueFiles[path] {
 					uniqueFiles[path] = true

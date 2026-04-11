@@ -26,16 +26,17 @@ var trackCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		tagName := args[len(args)-1]
-		targets := args[:len(args)-1]
+		rawTargets := args[:len(args)-1]
 
 		var ignorePatterns []string
 		if ignorePattern != "" {
 			ignorePatterns = strings.Split(ignorePattern, "|")
 		}
 
-		for _, target := range targets {
+		var validTargets []string
+		for _, target := range rawTargets {
 			if shouldIgnore(target, ignorePatterns) {
-				fmt.Printf("Ignorando alvo: %s\n", target)
+				fmt.Printf("Ignorando alvo via filtro regex: %s\n", target)
 				continue
 			}
 
@@ -43,18 +44,26 @@ var trackCmd = &cobra.Command{
 				fmt.Fprintf(os.Stderr, "Aviso: O alvo '%s' não existe no disco. Ignorando.\n", target)
 				continue
 			}
-
-			if err := storage.TrackPath(tagName, target); err != nil {
-				fmt.Fprintf(os.Stderr, "Erro ao rastrear '%s': %v\n", target, err)
-			} else {
-				fmt.Printf("Alvo '%s' rastreado com sucesso na tag '%s'.\n", target, tagName)
-			}
+			validTargets = append(validTargets, target)
 		}
+
+		if len(validTargets) == 0 {
+			fmt.Println("Nenhum alvo válido para rastrear.")
+			return
+		}
+
+		// Envia em lote para reconciliação e transação única no banco
+		if err := storage.TrackPaths(tagName, validTargets); err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao rastrear lote: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("%d alvo(s) rastreado(s) com sucesso na tag '%s'.\n", len(validTargets), tagName)
 	},
 }
 
 // shouldIgnore avalia se o target bate com algum padrão.
-// O filepath.Match não cruza delimitadores de caminho com '*', 
+// O filepath.Match não cruza delimitadores de caminho com '*',
 // o que atende à regra de ignorar apenas arquivos rasos da pasta atual.
 func shouldIgnore(target string, patterns []string) bool {
 	if len(patterns) == 0 {

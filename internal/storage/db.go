@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	BucketTags = "Tags"
-	BucketFiles    = "Files" // Preparação para a Fase 3
+	BucketTags    = "Tags"
+	BucketFiles   = "Files"
+	BucketIgnored = "Ignored" // Novo sub-bucket para indexação de exclusões
 )
 
 // getDBPath resolve o caminho seguro para o banco de dados global
@@ -48,6 +49,9 @@ func Open() (*bbolt.DB, error) {
 			return err
 		}
 		if _, err := tx.CreateBucketIfNotExists([]byte(BucketFiles)); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists([]byte(BucketIgnored)); err != nil {
 			return err
 		}
 		return nil

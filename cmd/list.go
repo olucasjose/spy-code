@@ -22,6 +22,7 @@ var (
 	listIgnore   string
 	listAbsolute bool
 	listExpand   bool
+	listIgnored  bool
 )
 
 var listCmd = &cobra.Command{
@@ -36,14 +37,13 @@ var listCmd = &cobra.Command{
 		return tags, cobra.ShellCompDirectiveNoFileComp
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		db, err := storage.Open()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
-			os.Exit(1)
-		}
-		defer db.Close()
-
+		// 1. Caso sem argumentos: Lista todas as tags isoladamente
 		if len(args) == 0 {
+			db, err := storage.Open()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
+				os.Exit(1)
+			}
 			fmt.Println("Tags cadastradas:")
 			db.View(func(tx *bbolt.Tx) error {
 				b := tx.Bucket([]byte(storage.BucketTags))
@@ -52,31 +52,72 @@ var listCmd = &cobra.Command{
 					return nil
 				})
 			})
+			db.Close() // Fecha e libera o lock do arquivo
 			return
 		}
 
 		tagName := args[0]
+
+		// 2. Interceptação da Blacklist isolada
+		if listIgnored {
+			ignoredMap, err := storage.GetIgnoredPaths(tagName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Erro ao ler Exclusion Index: %v\n", err)
+				os.Exit(1)
+			}
+
+			if len(ignoredMap) == 0 {
+				fmt.Printf("A blacklist da tag '%s' está vazia.\n", tagName)
+				return
+			}
+
+			fmt.Printf("Exclusion Index (Blacklist) da tag '%s':\n", tagName)
+			for path := range ignoredMap {
+				fmt.Printf("  - %s\n", path)
+			}
+			return
+		}
+
+		// 3. Busca principal isolada (Abre e fecha o banco rapidamente numa closure)
 		var files []string
+		err := func() error {
+			db, err := storage.Open()
+			if err != nil {
+				return err
+			}
+			defer db.Close() // Fecha o banco no fim deste bloco
 
-		db.View(func(tx *bbolt.Tx) error {
-			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-			if filesBucket == nil { return nil }
-			projFiles := filesBucket.Bucket([]byte(tagName))
-			if projFiles == nil { return nil }
+			return db.View(func(tx *bbolt.Tx) error {
+				filesBucket := tx.Bucket([]byte(storage.BucketFiles))
+				if filesBucket == nil {
+					return nil
+				}
+				projFiles := filesBucket.Bucket([]byte(tagName))
+				if projFiles == nil {
+					return nil
+				}
 
-			return projFiles.ForEach(func(k, v []byte) error {
-				files = append(files, string(k))
-				return nil
+				return projFiles.ForEach(func(k, v []byte) error {
+					files = append(files, string(k))
+					return nil
+				})
 			})
-		})
+		}()
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao consultar arquivos: %v\n", err)
+			os.Exit(1)
+		}
 
 		if len(files) == 0 {
 			fmt.Printf("Alvos rastreados na tag '%s':\n  (Vazio ou tag não inicializada)\n", tagName)
 			return
 		}
 
+		// 4. Expansão (Agora pode chamar o banco em O(1) sem colidir locks)
 		if listExpand {
-			files = expandPathsToFiles(files)
+			ignoredMap, _ := storage.GetIgnoredPaths(tagName)
+			files = expandPathsToFiles(files, ignoredMap)
 		}
 
 		fmt.Printf("Alvos rastreados na tag '%s':\n", tagName)
@@ -120,5 +161,6 @@ func init() {
 	listCmd.Flags().StringVarP(&listIgnore, "ignore", "I", "", "Padrões para ignorar na exibição (ex: \"node_modules|*.go\")")
 	listCmd.Flags().BoolVarP(&listAbsolute, "absolute", "A", false, "Exibe os caminhos absolutos originais sem truncar")
 	listCmd.Flags().BoolVarP(&listExpand, "expand", "e", false, "Expande diretórios lendo o disco físico antes de listar")
+	listCmd.Flags().BoolVarP(&listIgnored, "ignored", "i", false, "Exibe apenas os arquivos na blacklist permanente da tag")
 	rootCmd.AddCommand(listCmd)
 }
