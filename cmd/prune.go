@@ -24,7 +24,7 @@ var (
 
 var pruneCmd = &cobra.Command{
 	Use:   "prune [nome1] [nome2...]",
-	Short: "Remove do rastreamento os arquivos que não existem mais no disco",
+	Short: "Remove do banco os alvos (rastreados ou na blacklist) que não existem mais no disco",
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		tags, _ := storage.GetAllTags()
 		return tags, cobra.ShellCompDirectiveNoFileComp
@@ -47,15 +47,14 @@ var pruneCmd = &cobra.Command{
 		}
 		defer db.Close()
 
-		ghostsByTag := make(map[string][][]byte)
+		ghostsFilesByTag := make(map[string][][]byte)
+		ghostsIgnoredByTag := make(map[string][][]byte)
 		totalGhosts := 0
 
 		// Etapa 1: Escaneamento (View transacional - Não bloqueia o banco)
 		err = db.View(func(tx *bbolt.Tx) error {
 			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-			if filesBucket == nil {
-				return nil
-			}
+			ignoredBucket := tx.Bucket([]byte(storage.BucketIgnored))
 
 			var targetTags []string
 			if pruneAll {
@@ -71,23 +70,36 @@ var pruneCmd = &cobra.Command{
 			}
 
 			for _, tagName := range targetTags {
-				projFiles := filesBucket.Bucket([]byte(tagName))
-				if projFiles == nil {
-					if !pruneAll && !pruneQuiet {
-						fmt.Printf("Aviso: Tag '%s' não encontrada ou sem arquivos rastreados.\n", tagName)
+				// 1. Escaneia arquivos rastreados
+				if filesBucket != nil {
+					if projFiles := filesBucket.Bucket([]byte(tagName)); projFiles != nil {
+						_ = projFiles.ForEach(func(k, v []byte) error {
+							if _, err := os.Stat(string(k)); os.IsNotExist(err) {
+								ghostsFilesByTag[tagName] = append(ghostsFilesByTag[tagName], k)
+								totalGhosts++
+							}
+							return nil
+						})
 					}
-					continue
 				}
 
-				_ = projFiles.ForEach(func(k, v []byte) error {
-					path := string(k)
-					// Identificação Fail-Fast
-					if _, err := os.Stat(path); os.IsNotExist(err) {
-						ghostsByTag[tagName] = append(ghostsByTag[tagName], k)
-						totalGhosts++
+				// 2. Escaneia arquivos na blacklist (Exclusion Index)
+				if ignoredBucket != nil {
+					if projIgnored := ignoredBucket.Bucket([]byte(tagName)); projIgnored != nil {
+						_ = projIgnored.ForEach(func(k, v []byte) error {
+							if _, err := os.Stat(string(k)); os.IsNotExist(err) {
+								ghostsIgnoredByTag[tagName] = append(ghostsIgnoredByTag[tagName], k)
+								totalGhosts++
+							}
+							return nil
+						})
 					}
-					return nil
-				})
+				}
+
+				if !pruneAll && !pruneQuiet && len(ghostsFilesByTag[tagName]) == 0 && len(ghostsIgnoredByTag[tagName]) == 0 {
+					// Verificação simples apenas para dar feedback se a tag for vazia
+					fmt.Printf("Verificando tag '%s'...\n", tagName)
+				}
 			}
 			return nil
 		})
@@ -100,17 +112,27 @@ var pruneCmd = &cobra.Command{
 		// Etapa 2: Exibição e Interação
 		if totalGhosts == 0 {
 			if !pruneQuiet {
-				fmt.Println("Nenhum arquivo fantasma encontrado. O rastreamento está atualizado.")
+				fmt.Println("Nenhum arquivo fantasma encontrado. Os índices estão atualizados.")
 			}
 			return
 		}
 
 		if !pruneQuiet {
-			for tagName, keys := range ghostsByTag {
-				if len(keys) > 0 {
-					fmt.Printf("Tag '%s': %d arquivo(s) fantasma(s) detectado(s).\n", tagName, len(keys))
-					for _, k := range keys {
-						fmt.Printf("  - %s\n", string(k))
+			// Agrupa a exibição para o usuário
+			allTagsMap := make(map[string]bool)
+			for t := range ghostsFilesByTag { allTagsMap[t] = true }
+			for t := range ghostsIgnoredByTag { allTagsMap[t] = true }
+
+			for tagName := range allTagsMap {
+				fLen := len(ghostsFilesByTag[tagName])
+				iLen := len(ghostsIgnoredByTag[tagName])
+				if fLen > 0 || iLen > 0 {
+					fmt.Printf("Tag '%s': %d arquivo(s) fantasma(s) detectado(s).\n", tagName, fLen+iLen)
+					for _, k := range ghostsFilesByTag[tagName] {
+						fmt.Printf("  - %s [Rastreado]\n", string(k))
+					}
+					for _, k := range ghostsIgnoredByTag[tagName] {
+						fmt.Printf("  - %s [Blacklist]\n", string(k))
 					}
 				}
 			}
@@ -124,7 +146,7 @@ var pruneCmd = &cobra.Command{
 		}
 
 		if !pruneForce {
-			fmt.Printf("\nDeseja remover %d arquivo(s) fantasma(s) permanentemente do índice? [s/N]: ", totalGhosts)
+			fmt.Printf("\nDeseja remover %d arquivo(s) fantasma(s) permanentemente dos índices? [s/N]: ", totalGhosts)
 			reader := bufio.NewReader(os.Stdin)
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(strings.ToLower(response))
@@ -137,22 +159,30 @@ var pruneCmd = &cobra.Command{
 		// Etapa 3: Execução Destrutiva
 		err = db.Update(func(tx *bbolt.Tx) error {
 			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-			if filesBucket == nil {
-				return nil
+			ignoredBucket := tx.Bucket([]byte(storage.BucketIgnored))
+
+			// Limpa rastreados
+			if filesBucket != nil {
+				for tagName, keys := range ghostsFilesByTag {
+					if projFiles := filesBucket.Bucket([]byte(tagName)); projFiles != nil {
+						for _, k := range keys {
+							if err := projFiles.Delete(k); err != nil {
+								return fmt.Errorf("falha ao remover chave de rastreamento '%s': %w", string(k), err)
+							}
+						}
+					}
+				}
 			}
 
-			for tagName, keys := range ghostsByTag {
-				if len(keys) == 0 {
-					continue
-				}
-				projFiles := filesBucket.Bucket([]byte(tagName))
-				if projFiles == nil {
-					continue // Condição de corrida: apagaram a tag durante o prompt
-				}
-
-				for _, k := range keys {
-					if err := projFiles.Delete(k); err != nil {
-						return fmt.Errorf("falha ao remover chave interna '%s': %w", string(k), err)
+			// Limpa blacklist
+			if ignoredBucket != nil {
+				for tagName, keys := range ghostsIgnoredByTag {
+					if projIgnored := ignoredBucket.Bucket([]byte(tagName)); projIgnored != nil {
+						for _, k := range keys {
+							if err := projIgnored.Delete(k); err != nil {
+								return fmt.Errorf("falha ao remover chave da blacklist '%s': %w", string(k), err)
+							}
+						}
 					}
 				}
 			}
@@ -165,7 +195,7 @@ var pruneCmd = &cobra.Command{
 		}
 
 		if !pruneQuiet {
-			fmt.Printf("Sucesso! %d arquivo(s) fantasma(s) removido(s).\n", totalGhosts)
+			fmt.Printf("Sucesso! %d arquivo(s) fantasma(s) removido(s) do banco.\n", totalGhosts)
 		}
 	},
 }
