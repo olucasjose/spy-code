@@ -10,7 +10,7 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-// IgnorePaths move alvos explícitos do fluxo de rastreamento para a blacklist da tag.
+// IgnorePaths move alvos explícitos do fluxo de rastreamento para a denylist da tag.
 func IgnorePaths(tagName string, targets []string) error {
 	db, err := Open()
 	if err != nil {
@@ -92,7 +92,7 @@ func GetIgnoredPaths(tagName string) (map[string]bool, error) {
 	return ignored, err
 }
 
-// UnignorePaths remove alvos da blacklist, devolvendo-os ao fluxo de herança original.
+// UnignorePaths remove alvos da denylist, devolvendo-os ao fluxo de herança original.
 func UnignorePaths(tagName string, targets []string) error {
 	db, err := Open()
 	if err != nil {

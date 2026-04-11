@@ -29,7 +29,7 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
    ```bash
    tae track src/handlers/ api/routes.go patch_1.2
    ```
-   *Se quiser que um arquivo interno de uma pasta rastreada NÂO seja exportado, coloque-o na blacklist permanente da tag:*
+   *Se quiser que um arquivo interno de uma pasta rastreada NÂO seja exportado, coloque-o na denylist permanente da tag:*
    ```bash
    tae ignore src/handlers/dev_test.go patch_1.2
    ```
@@ -38,7 +38,7 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
    ```bash
    tae list patch_1.2
    ```
-   *Para auditar a blacklist:*
+   *Para auditar a denylist:*
    ```bash
    tae list patch_1.2 --ignored
    ```
@@ -59,7 +59,7 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
 | `list [tag]` | Lista alvos rastreados. Suporta árvore visual (`-t`), profundidade (`-L`), filtro (`-I`), expansão de pastas (`-e`) e dump de exclusões (`-i` / `--ignored`). | `tae list refactor -t -e` |
 | `track <alvos> <tag>` | Adiciona arquivos/pastas ao monitoramento explícito da tag. | `tae track ./cmd/ meu_app` |
 | `untrack <alvos> <tag>`| Remove arquivos/pastas específicos do monitoramento explícito. | `tae untrack ./cmd/ meu_app` |
-| `ignore <alvos> <tag>` | Adiciona arquivos à blacklist (Exclusion Index) para silenciá-los. Use `-r` para remover da blacklist. | `tae ignore ./src/tmp meu_app` |
+| `ignore <alvos> <tag>` | Adiciona arquivos à denylist (Exclusion Index) para silenciá-los. Use `-r` para remover da denylist. | `tae ignore ./src/tmp meu_app` |
 | `prune [tags]...` | Remove arquivos fantasmas do banco. Exige confirmação por padrão. Suporta listar (`-l`), forçar (`-f`), silencioso (`-q`) e todas as tags (`-a`). | `tae prune -a -f` |
 | `export <tag> <dest>` | Exporta os arquivos rastreados lendo o disco local. Suporta fatiamento em zip (`-z`, `-l`, `-m`). | `tae export meu_app ./build -z` |
 | `git diff <c1> <c2>` | Empacota em zip os arquivos alterados (isolado da working tree). O nome do zip detecta automaticamente o repositório. | `tae git diff HEAD~1 HEAD -l 100` |

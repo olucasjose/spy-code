@@ -24,7 +24,7 @@ var (
 
 var pruneCmd = &cobra.Command{
 	Use:   "prune [nome1] [nome2...]",
-	Short: "Remove do banco os alvos (rastreados ou na blacklist) que não existem mais no disco",
+	Short: "Remove do banco os alvos (rastreados ou na denylist) que não existem mais no disco",
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		tags, _ := storage.GetAllTags()
 		return tags, cobra.ShellCompDirectiveNoFileComp
@@ -83,7 +83,7 @@ var pruneCmd = &cobra.Command{
 					}
 				}
 
-				// 2. Escaneia arquivos na blacklist (Exclusion Index)
+				// 2. Escaneia arquivos na denylist (Exclusion Index)
 				if ignoredBucket != nil {
 					if projIgnored := ignoredBucket.Bucket([]byte(tagName)); projIgnored != nil {
 						_ = projIgnored.ForEach(func(k, v []byte) error {
@@ -174,13 +174,13 @@ var pruneCmd = &cobra.Command{
 				}
 			}
 
-			// Limpa blacklist
+			// Limpa denylist
 			if ignoredBucket != nil {
 				for tagName, keys := range ghostsIgnoredByTag {
 					if projIgnored := ignoredBucket.Bucket([]byte(tagName)); projIgnored != nil {
 						for _, k := range keys {
 							if err := projIgnored.Delete(k); err != nil {
-								return fmt.Errorf("falha ao remover chave da blacklist '%s': %w", string(k), err)
+								return fmt.Errorf("falha ao remover chave da denylist '%s': %w", string(k), err)
 							}
 						}
 					}

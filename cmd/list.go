@@ -67,7 +67,7 @@ var listCmd = &cobra.Command{
 			}
 
 			if len(ignoredMap) == 0 {
-				fmt.Printf("A blacklist da tag '%s' está vazia.\n", tagName)
+				fmt.Printf("A denylist da tag '%s' está vazia.\n", tagName)
 				return
 			}
 
@@ -161,6 +161,6 @@ func init() {
 	listCmd.Flags().StringVarP(&listIgnore, "ignore", "I", "", "Padrões para ignorar na exibição (ex: \"node_modules|*.go\")")
 	listCmd.Flags().BoolVarP(&listAbsolute, "absolute", "A", false, "Exibe os caminhos absolutos originais sem truncar")
 	listCmd.Flags().BoolVarP(&listExpand, "expand", "e", false, "Expande diretórios lendo o disco físico antes de listar")
-	listCmd.Flags().BoolVarP(&listIgnored, "ignored", "i", false, "Exibe apenas os arquivos na blacklist permanente da tag")
+	listCmd.Flags().BoolVarP(&listIgnored, "ignored", "i", false, "Exibe apenas os arquivos na denylist permanente da tag")
 	rootCmd.AddCommand(listCmd)
 }

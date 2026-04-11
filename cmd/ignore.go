@@ -16,7 +16,7 @@ var ignoreRemove bool
 
 var ignoreCmd = &cobra.Command{
 	Use:   "ignore <arquivo1> [arquivo2...] <nome da tag>",
-	Short: "Gerencia os arquivos na blacklist da tag (Exclusion Index)",
+	Short: "Gerencia os arquivos na denylist da tag (Exclusion Index)",
 	Args:  cobra.MinimumNArgs(2),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		tags, _ := storage.GetAllTags()
@@ -29,10 +29,10 @@ var ignoreCmd = &cobra.Command{
 		// Bifurcação de estado via Flag
 		if ignoreRemove {
 			if err := storage.UnignorePaths(tagName, targets); err != nil {
-				fmt.Fprintf(os.Stderr, "Erro ao remover alvos da blacklist: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Erro ao remover alvos da denylist: %v\n", err)
 				os.Exit(1)
 			}
-			fmt.Printf("%d alvo(s) removido(s) da blacklist da tag '%s'.\n", len(targets), tagName)
+			fmt.Printf("%d alvo(s) removido(s) da denylist da tag '%s'.\n", len(targets), tagName)
 			return
 		}
 
@@ -41,11 +41,11 @@ var ignoreCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("%d alvo(s) adicionado(s) à blacklist da tag '%s'.\n", len(targets), tagName)
+		fmt.Printf("%d alvo(s) adicionado(s) à denylist da tag '%s'.\n", len(targets), tagName)
 	},
 }
 
 func init() {
-	ignoreCmd.Flags().BoolVarP(&ignoreRemove, "remove", "r", false, "Remove os alvos da blacklist (restaura o rastreamento por herança)")
+	ignoreCmd.Flags().BoolVarP(&ignoreRemove, "remove", "r", false, "Remove os alvos da denylist (restaura o rastreamento por herança)")
 	rootCmd.AddCommand(ignoreCmd)
 }
