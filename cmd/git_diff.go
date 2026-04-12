@@ -16,14 +16,16 @@ import (
 	"time"
 
 	"tae/internal/grouper"
-    "tae/internal/render"
+	"tae/internal/render"
+	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	diffLimit int
-	diffMerge bool
+	diffLimit    int
+	diffMerge    bool
+	diffNoIgnore bool
 )
 
 var gitDiffCmd = &cobra.Command{
@@ -34,9 +36,34 @@ var gitDiffCmd = &cobra.Command{
 		commit1, commit2 := args[0], args[1]
 		fmt.Printf("Comparando %s -> %s\n\n", commit1, commit2)
 
-		files := getChangedFiles(commit1, commit2)
+		rawFiles := getChangedFiles(commit1, commit2)
+		if len(rawFiles) == 0 {
+			fmt.Println("\nNenhum arquivo modificado encontrado na comparação.")
+			os.Exit(0)
+		}
+
+		// Interceptação e Filtro da Denylist
+		var files []string
+		if !diffNoIgnore {
+			repoID := getGitRepoID()
+			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar denylist do repositório: %v\n", err)
+			}
+
+			for _, f := range rawFiles {
+				if !ignoredMap[f] {
+					files = append(files, f)
+				} else {
+					fmt.Printf("  I: %s (ignorado via denylist)\n", f)
+				}
+			}
+		} else {
+			files = rawFiles
+		}
+
 		if len(files) == 0 {
-			fmt.Println("\nNenhum arquivo encontrado para compactar.")
+			fmt.Println("\nTodos os arquivos alterados foram retidos pela denylist. Nada a compactar.")
 			os.Exit(0)
 		}
 
@@ -68,6 +95,7 @@ var gitDiffCmd = &cobra.Command{
 func init() {
 	gitDiffCmd.Flags().IntVarP(&diffLimit, "limit", "l", 0, "Teto máximo de arquivos por zip")
 	gitDiffCmd.Flags().BoolVarP(&diffMerge, "merge", "m", false, "Mescla zips subpopulados mantendo o limite (requer -l)")
+	gitDiffCmd.Flags().BoolVar(&diffNoIgnore, "no-ignore", false, "Ignora a denylist do repositório e empacota todos os arquivos alterados")
 	gitCmd.AddCommand(gitDiffCmd)
 }
 

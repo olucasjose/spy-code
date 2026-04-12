@@ -66,3 +66,42 @@ func getGitRepoName() string {
 	}
 	return filepath.Base(strings.TrimSpace(string(out)))
 }
+
+// getGitRepoID extrai o hash do commit raiz (imutável). Ele é nossa chave primária no banco.
+func getGitRepoID() string {
+	cmd := exec.Command("git", "rev-list", "--max-parents=0", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		// Fallback para o nome da pasta caso o repo seja recém-criado (sem commits)
+		return getGitRepoName()
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) > 0 && lines[0] != "" {
+		return lines[0]
+	}
+	return getGitRepoName()
+}
+
+// getGitRelativePath normaliza qualquer alvo do usuário (caminhos absolutos ou relativos)
+// transformando-os em caminhos relativos à raiz do repositório, com barras '/'
+func getGitRelativePath(target string) (string, error) {
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		return "", err
+	}
+	
+	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", fmt.Errorf("falha ao localizar raiz do git: %v", err)
+	}
+	gitRoot := strings.TrimSpace(string(out))
+	
+	if !strings.HasPrefix(absTarget, gitRoot) {
+		return "", fmt.Errorf("o alvo '%s' encontra-se fora do repositório atual", target)
+	}
+	
+	relPath := strings.TrimPrefix(absTarget, gitRoot)
+	relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
+	
+	return filepath.ToSlash(relPath), nil
+}

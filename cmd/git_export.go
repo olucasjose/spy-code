@@ -15,15 +15,17 @@ import (
 	"sync"
 
 	"tae/internal/grouper"
-    "tae/internal/render"
+	"tae/internal/render"
+	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	gitExportZip   bool
-	gitExportLimit int
-	gitExportMerge bool
+	gitExportZip      bool
+	gitExportLimit    int
+	gitExportMerge    bool
+	gitExportNoIgnore bool
 )
 
 var gitExportCmd = &cobra.Command{
@@ -42,15 +44,33 @@ var gitExportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		var files []string
+		var rawFiles []string
 		for _, f := range strings.Split(strings.TrimSpace(out.String()), "\n") {
 			if f != "" {
-				files = append(files, f)
+				rawFiles = append(rawFiles, f)
 			}
 		}
 
+		// Interceptação e Filtro da Denylist
+		var files []string
+		if !gitExportNoIgnore {
+			repoID := getGitRepoID()
+			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar denylist do repositório: %v\n", err)
+			}
+			
+			for _, f := range rawFiles {
+				if !ignoredMap[f] {
+					files = append(files, f)
+				}
+			}
+		} else {
+			files = rawFiles
+		}
+
 		if len(files) == 0 {
-			fmt.Println("Nenhum arquivo válido encontrado para exportação.")
+			fmt.Println("Nenhum arquivo válido encontrado para exportação (ou todos foram retidos pela denylist).")
 			os.Exit(1)
 		}
 
@@ -104,6 +124,7 @@ func init() {
 	gitExportCmd.Flags().BoolVarP(&gitExportZip, "zip", "z", false, "Exporta e compacta os arquivos em formato .zip")
 	gitExportCmd.Flags().IntVarP(&gitExportLimit, "limit", "l", 0, "Teto máximo de arquivos por zip (requer -z)")
 	gitExportCmd.Flags().BoolVarP(&gitExportMerge, "merge", "m", false, "Mescla zips subpopulados mantendo o limite (requer -z e -l)")
+	gitExportCmd.Flags().BoolVar(&gitExportNoIgnore, "no-ignore", false, "Ignora a denylist do repositório e exporta todos os arquivos")
 	gitCmd.AddCommand(gitExportCmd)
 }
 
