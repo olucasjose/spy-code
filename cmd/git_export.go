@@ -26,6 +26,7 @@ var (
 	gitExportLimit    int
 	gitExportMerge    bool
 	gitExportNoIgnore bool
+	gitExportFlatten  bool
 )
 
 var gitExportCmd = &cobra.Command{
@@ -79,8 +80,13 @@ var gitExportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		basePrefix := render.GetCommonPrefix(files)
+basePrefix := render.GetCommonPrefix(files)
 		numWorkers := runtime.NumCPU()
+
+		var flattenMap map[string]string
+		if gitExportFlatten {
+			flattenMap = render.ResolveFlattenNames(files, basePrefix)
+		}
 
 		if gitExportZip {
 			repoName := getGitRepoName()
@@ -94,7 +100,7 @@ var gitExportCmd = &cobra.Command{
 
 			for i := 0; i < numWorkers; i++ {
 				wg.Add(1)
-				go gitZipWorker(jobs, &wg, basePrefix, destPath, commit)
+				go gitZipWorker(jobs, &wg, basePrefix, destPath, commit, flattenMap)
 			}
 
 			for _, c := range chunks { jobs <- c }
@@ -109,7 +115,7 @@ var gitExportCmd = &cobra.Command{
 
 			for i := 0; i < numWorkers; i++ {
 				wg.Add(1)
-				go gitFlatWorker(jobs, &wg, basePrefix, destPath, commit)
+				go gitFlatWorker(jobs, &wg, basePrefix, destPath, commit, flattenMap)
 			}
 
 			for _, f := range files { jobs <- f }
@@ -125,14 +131,15 @@ func init() {
 	gitExportCmd.Flags().IntVarP(&gitExportLimit, "limit", "l", 0, "Teto máximo de arquivos por zip (requer -z)")
 	gitExportCmd.Flags().BoolVarP(&gitExportMerge, "merge", "m", false, "Mescla zips subpopulados mantendo o limite (requer -z e -l)")
 	gitExportCmd.Flags().BoolVar(&gitExportNoIgnore, "no-ignore", false, "Ignora a denylist do repositório e exporta todos os arquivos")
+	gitExportCmd.Flags().BoolVarP(&gitExportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
 	gitCmd.AddCommand(gitExportCmd)
 }
 
-func gitZipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, dest, commit string) {
+func gitZipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, dest, commit string, flattenMap map[string]string) {
 	defer wg.Done()
 	for chunk := range jobs {
 		zipPath := filepath.Join(dest, chunk.ZipName)
-		if err := createGitZipChunk(zipPath, chunk.Files, basePrefix, commit); err != nil {
+		if err := createGitZipChunk(zipPath, chunk.Files, basePrefix, commit, flattenMap); err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao criar %s: %v\n", chunk.ZipName, err)
 		} else {
 			fmt.Printf("  -> %s gerado (%d arquivos)\n", chunk.ZipName, len(chunk.Files))
@@ -140,7 +147,7 @@ func gitZipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefi
 	}
 }
 
-func createGitZipChunk(zipPath string, files []string, basePrefix, commit string) error {
+func createGitZipChunk(zipPath string, files []string, basePrefix, commit string, flattenMap map[string]string) error {
 	zipFile, err := os.Create(zipPath)
 	if err != nil { return err }
 	defer zipFile.Close()
@@ -149,8 +156,13 @@ func createGitZipChunk(zipPath string, files []string, basePrefix, commit string
 	defer archive.Close()
 
 	for _, path := range files {
-		relPath := filepath.ToSlash(strings.TrimPrefix(path, basePrefix))
-		if relPath == "" { relPath = filepath.Base(path) }
+		var relPath string
+		if flattenMap != nil && flattenMap[path] != "" {
+			relPath = flattenMap[path]
+		} else {
+			relPath = filepath.ToSlash(strings.TrimPrefix(path, basePrefix))
+			if relPath == "" { relPath = filepath.Base(path) }
+		}
 
 		writer, err := archive.Create(relPath)
 		if err != nil { return err }
@@ -162,10 +174,16 @@ func createGitZipChunk(zipPath string, files []string, basePrefix, commit string
 	return nil
 }
 
-func gitFlatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest, commit string) {
+func gitFlatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest, commit string, flattenMap map[string]string) {
 	defer wg.Done()
 	for path := range jobs {
-		relPath := strings.TrimPrefix(path, basePrefix)
+		var relPath string
+		if flattenMap != nil && flattenMap[path] != "" {
+			relPath = flattenMap[path]
+		} else {
+			relPath = strings.TrimPrefix(path, basePrefix)
+		}
+		
 		targetPath := filepath.Join(dest, relPath)
 
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
