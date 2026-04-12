@@ -26,6 +26,7 @@ var (
 	exportLimit   int
 	exportMerge   bool
 	exportFlatten bool
+	exportQuiet   bool
 )
 
 var exportCmd = &cobra.Command{
@@ -52,13 +53,11 @@ var exportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Carrega a Denylist em O(1) e passa para o motor de expansão
 		ignoredMap, err := storage.GetIgnoredPaths(tagName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar Exclusion Index: %v\n", err)
 		}
 
-		// Pré-processamento com filtro injetado
 		files := expandPathsToFiles(rawFiles, ignoredMap)
 		if len(files) == 0 {
 			fmt.Println("Erro: Nenhum arquivo válido encontrado (possivelmente todos foram ignorados).")
@@ -78,16 +77,21 @@ var exportCmd = &cobra.Command{
 			flattenMap = render.ResolveFlattenNames(files, basePrefix)
 		}
 
+		var printMu sync.Mutex
+
 		if exportZip {
 			chunks := grouper.GroupFiles(files, exportLimit, tagName, exportMerge)
 			fmt.Printf("Iniciando exportação em ZIP. %d arquivo(s) expandido(s) divididos em %d lote(s) para '%s'...\n", len(files), len(chunks), destPath)
+			if !exportQuiet {
+				fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
+			}
 
 			jobs := make(chan grouper.ExportChunk, len(chunks))
 			var wg sync.WaitGroup
 
 			for i := 0; i < numWorkers; i++ {
 				wg.Add(1)
-				go zipWorker(jobs, &wg, basePrefix, destPath, flattenMap)
+				go zipWorker(jobs, &wg, basePrefix, destPath, flattenMap, &printMu)
 			}
 
 			for _, c := range chunks {
@@ -105,7 +109,7 @@ var exportCmd = &cobra.Command{
 
 			for i := 0; i < numWorkers; i++ {
 				wg.Add(1)
-				go flatWorker(jobs, &wg, basePrefix, destPath, flattenMap)
+				go flatWorker(jobs, &wg, basePrefix, destPath, flattenMap, &printMu)
 			}
 
 			for _, file := range files {
@@ -124,6 +128,7 @@ func init() {
 	exportCmd.Flags().IntVarP(&exportLimit, "limit", "l", 0, "Teto máximo de arquivos por zip (requer -z)")
 	exportCmd.Flags().BoolVarP(&exportMerge, "merge", "m", false, "Mescla zips subpopulados sequencialmente mantendo o limite (requer -z e -l)")
 	exportCmd.Flags().BoolVarP(&exportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
+	exportCmd.Flags().BoolVarP(&exportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
 	rootCmd.AddCommand(exportCmd)
 }
 
@@ -154,20 +159,18 @@ func getTagFiles(tagName string) []string {
 	return files
 }
 
-// expandPathsToFiles converte diretórios rastreados em uma lista plana de arquivos, respeitando o Exclusion Index.
 func expandPathsToFiles(paths []string, ignored map[string]bool) []string {
 	uniqueFiles := make(map[string]bool)
 	var expanded []string
 
 	for _, p := range paths {
-		// O alvo inteiro foi ignorado?
 		if ignored[p] {
 			continue
 		}
 
 		info, err := os.Stat(p)
 		if err != nil {
-			continue // Ignora alvos deletados do disco (serão limpos via tae prune)
+			continue
 		}
 
 		if !info.IsDir() {
@@ -183,7 +186,6 @@ func expandPathsToFiles(paths []string, ignored map[string]bool) []string {
 				return nil
 			}
 
-			// Interceptação O(1). Se for pasta, injeta o SkipDir e poupa I/O.
 			if ignored[path] {
 				if f.IsDir() {
 					return filepath.SkipDir
@@ -203,15 +205,35 @@ func expandPathsToFiles(paths []string, ignored map[string]bool) []string {
 	return expanded
 }
 
-func zipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, dest string, flattenMap map[string]string) {
+func zipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, dest string, flattenMap map[string]string, mu *sync.Mutex) {
 	defer wg.Done()
 	for chunk := range jobs {
 		zipPath := filepath.Join(dest, chunk.ZipName)
-		if err := createZipChunk(zipPath, chunk.Files, basePrefix, flattenMap); err != nil {
+		err := createZipChunk(zipPath, chunk.Files, basePrefix, flattenMap)
+
+		mu.Lock()
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao criar %s: %v\n", chunk.ZipName, err)
 		} else {
 			fmt.Printf("  -> %s gerado (%d arquivos reais)\n", chunk.ZipName, len(chunk.Files))
+			if !exportQuiet {
+				for _, path := range chunk.Files {
+					var relPath string
+					if flattenMap != nil && flattenMap[path] != "" {
+						relPath = flattenMap[path]
+					} else {
+						relPath = strings.TrimPrefix(path, basePrefix)
+						relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
+						if relPath == "" {
+							relPath = filepath.Base(path)
+						}
+						relPath = filepath.ToSlash(relPath)
+					}
+					fmt.Printf("      - %s\n", relPath)
+				}
+			}
 		}
+		mu.Unlock()
 	}
 }
 
@@ -269,7 +291,7 @@ func createZipChunk(zipPath string, files []string, basePrefix string, flattenMa
 	return nil
 }
 
-func flatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string, flattenMap map[string]string) {
+func flatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string, flattenMap map[string]string, mu *sync.Mutex) {
 	defer wg.Done()
 	for path := range jobs {
 		var relPath string
@@ -284,12 +306,15 @@ func flatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string,
 		}
 
 		targetPath := filepath.Join(dest, relPath)
+		err := copySingleFile(path, targetPath)
 
-		if err := copySingleFile(path, targetPath); err != nil {
+		mu.Lock()
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao exportar %s: %v\n", path, err)
-		} else {
+		} else if !exportQuiet {
 			fmt.Printf("  -> %s\n", targetPath)
 		}
+		mu.Unlock()
 	}
 }
 
