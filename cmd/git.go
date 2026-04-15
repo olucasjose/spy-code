@@ -125,3 +125,12 @@ func isGitPathIgnored(target string, ignoredMap map[string]bool) bool {
 	}
 	return false
 }
+
+// getGitRoot retorna o caminho absoluto da raiz do repositório Git atual
+func getGitRoot() string {
+	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return ""
+	}
+	return filepath.ToSlash(strings.TrimSpace(string(out)))
+}

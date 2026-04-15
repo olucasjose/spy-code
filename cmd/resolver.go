@@ -44,3 +44,30 @@ func resolveTagPaths(tagName string, targets []string) ([]string, error) {
 	}
 	return resolved, nil
 }
+
+// restorePathsForDisk converte caminhos lidos do banco em caminhos absolutos testáveis no disco físico.
+// Se a tag for Local, devolve como está. Se for Git, valida o repositório e concatena com a raiz do Git.
+func restorePathsForDisk(tagName string, paths []string) ([]string, error) {
+	meta, err := storage.GetTagMeta(tagName)
+	if err != nil {
+		return nil, err
+	}
+
+	if meta.Type == storage.TagTypeGit {
+		if !isInsideGitRepo() {
+			return nil, fmt.Errorf("a tag '%s' é do Git. Execute este comando dentro do repositório", tagName)
+		}
+		if getGitRepoID() != meta.RepoID {
+			return nil, fmt.Errorf("a tag '%s' pertence a outro repositório Git (%s)", tagName, meta.RepoID)
+		}
+
+		gitRoot := getGitRoot()
+		var absPaths []string
+		for _, p := range paths {
+			absPaths = append(absPaths, filepath.ToSlash(filepath.Join(gitRoot, p)))
+		}
+		return absPaths, nil
+	}
+
+	return paths, nil
+}
