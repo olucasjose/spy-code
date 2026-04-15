@@ -114,10 +114,27 @@ var listCmd = &cobra.Command{
 			return
 		}
 
-		// 4. Expansão (Agora pode chamar o banco em O(1) sem colidir locks)
+		// NOVA LÓGICA: Restaura os caminhos para bater com a raiz física se for tag Git
+		resolvedFiles, err := restorePathsForDisk(tagName, files)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro de escopo estrutural: %v\n", err)
+			os.Exit(1)
+		}
+		files = resolvedFiles
+
+		// 4. Expansão
 		if listExpand {
 			ignoredMap, _ := storage.GetIgnoredPaths(tagName)
-			files = expandPathsToFiles(files, ignoredMap)
+			
+			// Restaura a denylist para a mesma base física
+			restoredIgnored := make(map[string]bool)
+			var igPaths []string
+			for p := range ignoredMap { igPaths = append(igPaths, p) }
+			if resIgPaths, err := restorePathsForDisk(tagName, igPaths); err == nil {
+				for _, p := range resIgPaths { restoredIgnored[p] = true }
+			}
+
+			files = expandPathsToFiles(files, restoredIgnored)
 		}
 
 		fmt.Printf("Alvos rastreados na tag '%s':\n", tagName)

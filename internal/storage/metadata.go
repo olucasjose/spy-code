@@ -16,8 +16,9 @@ const (
 
 // TagMeta define o schema do valor salvo no bucket BucketTags
 type TagMeta struct {
-	Type   string `json:"type"`
-	RepoID string `json:"repo_id,omitempty"`
+	Type    string `json:"type"`
+	RepoID  string `json:"repo_id,omitempty"`
+	GitRoot string `json:"git_root,omitempty"` // Novo campo para viabilizar operações globais
 }
 
 // ParseTagMeta lê os metadados de uma tag com suporte a retrocompatibilidade

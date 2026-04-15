@@ -53,12 +53,29 @@ var exportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		resolvedFiles, err := restorePathsForDisk(tagName, rawFiles)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro de escopo estrutural: %v\n", err)
+			os.Exit(1)
+		}
+
 		ignoredMap, err := storage.GetIgnoredPaths(tagName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar Exclusion Index: %v\n", err)
 		}
 
-		files := expandPathsToFiles(rawFiles, ignoredMap)
+		restoredIgnored := make(map[string]bool)
+		var igPaths []string
+		for p := range ignoredMap {
+			igPaths = append(igPaths, p)
+		}
+		if resIgPaths, err := restorePathsForDisk(tagName, igPaths); err == nil {
+			for _, p := range resIgPaths {
+				restoredIgnored[p] = true
+			}
+		}
+
+		files := expandPathsToFiles(resolvedFiles, restoredIgnored)
 		if len(files) == 0 {
 			fmt.Println("Erro: Nenhum arquivo válido encontrado (possivelmente todos foram ignorados).")
 			os.Exit(1)

@@ -72,6 +72,7 @@ var convertCmd = &cobra.Command{
 
 				meta.Type = storage.TagTypeGit
 				meta.RepoID = repoID
+				meta.GitRoot = getGitRoot()
 				return tagsBucket.Put([]byte(tagName), storage.EncodeTagMeta(meta))
 
 			} else {

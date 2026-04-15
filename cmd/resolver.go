@@ -46,7 +46,7 @@ func resolveTagPaths(tagName string, targets []string) ([]string, error) {
 }
 
 // restorePathsForDisk converte caminhos lidos do banco em caminhos absolutos testáveis no disco físico.
-// Se a tag for Local, devolve como está. Se for Git, valida o repositório e concatena com a raiz do Git.
+// Executável de qualquer lugar do sistema.
 func restorePathsForDisk(tagName string, paths []string) ([]string, error) {
 	meta, err := storage.GetTagMeta(tagName)
 	if err != nil {
@@ -54,14 +54,16 @@ func restorePathsForDisk(tagName string, paths []string) ([]string, error) {
 	}
 
 	if meta.Type == storage.TagTypeGit {
-		if !isInsideGitRepo() {
-			return nil, fmt.Errorf("a tag '%s' é do Git. Execute este comando dentro do repositório", tagName)
-		}
-		if getGitRepoID() != meta.RepoID {
-			return nil, fmt.Errorf("a tag '%s' pertence a outro repositório Git (%s)", tagName, meta.RepoID)
+		gitRoot := meta.GitRoot
+
+		// Fallback de retrocompatibilidade para tags criadas antes desta correção
+		if gitRoot == "" {
+			if !isInsideGitRepo() || getGitRepoID() != meta.RepoID {
+				return nil, fmt.Errorf("esta tag não possui a raiz do Git salva. Execute este comando dentro do repositório %s uma vez para que ela seja lida", meta.RepoID)
+			}
+			gitRoot = getGitRoot()
 		}
 
-		gitRoot := getGitRoot()
 		var absPaths []string
 		for _, p := range paths {
 			absPaths = append(absPaths, filepath.ToSlash(filepath.Join(gitRoot, p)))

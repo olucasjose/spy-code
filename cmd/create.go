@@ -52,6 +52,7 @@ var createCmd = &cobra.Command{
 				meta = storage.TagMeta{
 					Type:   storage.TagTypeGit,
 					RepoID: repoID,
+					GitRoot: getGitRoot(),
 				}
 			}
 			encodedMeta := storage.EncodeTagMeta(meta)

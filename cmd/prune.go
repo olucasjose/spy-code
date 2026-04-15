@@ -70,34 +70,59 @@ var pruneCmd = &cobra.Command{
 			}
 
 			for _, tagName := range targetTags {
-				// 1. Escaneia arquivos rastreados
+				var rawFiles [][]byte
+				var rawIgnored [][]byte
+
 				if filesBucket != nil {
 					if projFiles := filesBucket.Bucket([]byte(tagName)); projFiles != nil {
 						_ = projFiles.ForEach(func(k, v []byte) error {
-							if _, err := os.Stat(string(k)); os.IsNotExist(err) {
-								ghostsFilesByTag[tagName] = append(ghostsFilesByTag[tagName], k)
-								totalGhosts++
-							}
+							rawFiles = append(rawFiles, k)
 							return nil
 						})
 					}
 				}
 
-				// 2. Escaneia arquivos na denylist (Exclusion Index)
 				if ignoredBucket != nil {
 					if projIgnored := ignoredBucket.Bucket([]byte(tagName)); projIgnored != nil {
 						_ = projIgnored.ForEach(func(k, v []byte) error {
-							if _, err := os.Stat(string(k)); os.IsNotExist(err) {
-								ghostsIgnoredByTag[tagName] = append(ghostsIgnoredByTag[tagName], k)
-								totalGhosts++
-							}
+							rawIgnored = append(rawIgnored, k)
 							return nil
 						})
+					}
+				}
+
+				// Tradução de contexto para o disco físico
+				var strFiles, strIgnored []string
+				for _, k := range rawFiles {
+					strFiles = append(strFiles, string(k))
+				}
+				for _, k := range rawIgnored {
+					strIgnored = append(strIgnored, string(k))
+				}
+
+				resolvedFiles, errF := restorePathsForDisk(tagName, strFiles)
+				resolvedIgnored, errI := restorePathsForDisk(tagName, strIgnored)
+
+				// Se a tag for do Git e estivermos fora do repositório, ignoramos a exclusão
+				// para não corromper o banco com falsos positivos.
+				if errF == nil {
+					for i, p := range resolvedFiles {
+						if _, err := os.Stat(p); os.IsNotExist(err) {
+							ghostsFilesByTag[tagName] = append(ghostsFilesByTag[tagName], rawFiles[i])
+							totalGhosts++
+						}
+					}
+				}
+				if errI == nil {
+					for i, p := range resolvedIgnored {
+						if _, err := os.Stat(p); os.IsNotExist(err) {
+							ghostsIgnoredByTag[tagName] = append(ghostsIgnoredByTag[tagName], rawIgnored[i])
+							totalGhosts++
+						}
 					}
 				}
 
 				if !pruneAll && !pruneQuiet && len(ghostsFilesByTag[tagName]) == 0 && len(ghostsIgnoredByTag[tagName]) == 0 {
-					// Verificação simples apenas para dar feedback se a tag for vazia
 					fmt.Printf("Verificando tag '%s'...\n", tagName)
 				}
 			}
@@ -120,8 +145,12 @@ var pruneCmd = &cobra.Command{
 		if !pruneQuiet {
 			// Agrupa a exibição para o usuário
 			allTagsMap := make(map[string]bool)
-			for t := range ghostsFilesByTag { allTagsMap[t] = true }
-			for t := range ghostsIgnoredByTag { allTagsMap[t] = true }
+			for t := range ghostsFilesByTag {
+				allTagsMap[t] = true
+			}
+			for t := range ghostsIgnoredByTag {
+				allTagsMap[t] = true
+			}
 
 			for tagName := range allTagsMap {
 				fLen := len(ghostsFilesByTag[tagName])
