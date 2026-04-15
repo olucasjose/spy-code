@@ -17,10 +17,11 @@ import (
 )
 
 var (
-	gitListTree    bool
-	gitListDepth   int
-	gitListIgnore  string
-	gitListIgnored bool
+	gitListTree     bool
+	gitListDepth    int
+	gitListIgnore   string
+	gitListIgnored  bool
+	gitListNoIgnore bool // Nova flag para bypass
 )
 
 var gitListCmd = &cobra.Command{
@@ -62,15 +63,38 @@ var gitListCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		var files []string
+		var rawFiles []string
 		for _, f := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 			if f != "" {
-				files = append(files, f)
+				rawFiles = append(rawFiles, f)
 			}
 		}
 
-		if len(files) == 0 {
+		if len(rawFiles) == 0 {
 			fmt.Println("Nenhum arquivo encontrado neste commit.")
+			return
+		}
+
+		// Interceptação e Filtro da Denylist
+		var files []string
+		if !gitListNoIgnore {
+			repoID := getGitRepoID()
+			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar denylist do repositório: %v\n", err)
+			}
+
+			for _, f := range rawFiles {
+				if !isGitPathIgnored(f, ignoredMap) {
+					files = append(files, f)
+				}
+			}
+		} else {
+			files = rawFiles
+		}
+
+		if len(files) == 0 {
+			fmt.Println("Todos os arquivos deste commit foram retidos pela denylist.")
 			return
 		}
 
@@ -107,5 +131,6 @@ func init() {
 	gitListCmd.Flags().IntVarP(&gitListDepth, "level", "L", 0, "Profundidade máxima da árvore (0 = infinito)")
 	gitListCmd.Flags().StringVarP(&gitListIgnore, "ignore", "I", "", "Padrões para ignorar na exibição (ex: \"*.go\")")
 	gitListCmd.Flags().BoolVarP(&gitListIgnored, "ignored", "i", false, "Exibe os arquivos na denylist do repositório")
+	gitListCmd.Flags().BoolVar(&gitListNoIgnore, "no-ignore", false, "Ignora a denylist do repositório e exibe todos os arquivos")
 	gitCmd.AddCommand(gitListCmd)
 }

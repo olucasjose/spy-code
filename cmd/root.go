@@ -12,7 +12,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:     "tae",
-	Version: "4.6.0",
+	Version: "4.6.1",
 	Short:   "Tae é um utilitário CLI para extração e empacotamento de código",
 	Long: `Tae (Tracker and Exporter) é uma ferramenta CLI modular para gerenciar, 
 rastrear e extrair arquivos no disco.
