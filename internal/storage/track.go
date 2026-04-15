@@ -30,7 +30,9 @@ func TrackPaths(tagName string, targets []string) error {
 	return db.Update(func(tx *bbolt.Tx) error {
 		projBucket := tx.Bucket([]byte(BucketTags))
 		if projBucket.Get([]byte(tagName)) == nil {
-			if err := projBucket.Put([]byte(tagName), []byte("{}")); err != nil {
+			// Injeção do metadado padronizado (local)
+			meta := EncodeTagMeta(TagMeta{Type: TagTypeLocal})
+			if err := projBucket.Put([]byte(tagName), meta); err != nil {
 				return fmt.Errorf("falha ao criar tag '%s' automaticamente: %w", tagName, err)
 			}
 		}

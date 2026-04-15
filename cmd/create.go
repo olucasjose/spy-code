@@ -13,11 +13,22 @@ import (
 	"go.etcd.io/bbolt"
 )
 
+var createGit bool
+
 var createCmd = &cobra.Command{
 	Use:   "create <nome1> [nome2...]",
 	Short: "Cria uma ou mais tags de rastreamento no banco de dados",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		var repoID string
+		if createGit {
+			if !isInsideGitRepo() {
+				fmt.Fprintln(os.Stderr, "Erro: A flag --git exige que o comando seja executado dentro de um repositório Git.")
+				os.Exit(1)
+			}
+			repoID = getGitRepoID()
+		}
+
 		db, err := storage.Open()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
@@ -35,9 +46,19 @@ var createCmd = &cobra.Command{
 				}
 			}
 			
+			// Preparação do metadado
+			meta := storage.TagMeta{Type: storage.TagTypeLocal}
+			if createGit {
+				meta = storage.TagMeta{
+					Type:   storage.TagTypeGit,
+					RepoID: repoID,
+				}
+			}
+			encodedMeta := storage.EncodeTagMeta(meta)
+
 			// Persistência
 			for _, tagName := range args {
-				if err := b.Put([]byte(tagName), []byte("{}")); err != nil {
+				if err := b.Put([]byte(tagName), encodedMeta); err != nil {
 					return fmt.Errorf("erro ao gravar tag '%s': %w", tagName, err)
 				}
 			}
@@ -49,10 +70,15 @@ var createCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("Tag(s) criada(s) com sucesso: %v\n", args)
+		if createGit {
+			fmt.Printf("Tag(s) Git criada(s) com sucesso e atreladas ao repositório [%s]: %v\n", repoID, args)
+		} else {
+			fmt.Printf("Tag(s) Local(is) criada(s) com sucesso: %v\n", args)
+		}
 	},
 }
 
 func init() {
+	createCmd.Flags().BoolVarP(&createGit, "git", "g", false, "Cria a tag com escopo amarrado ao repositório Git atual")
 	rootCmd.AddCommand(createCmd)
 }

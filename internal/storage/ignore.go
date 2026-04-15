@@ -31,8 +31,9 @@ func IgnorePaths(tagName string, targets []string) error {
 	return db.Update(func(tx *bbolt.Tx) error {
 		tagsBucket := tx.Bucket([]byte(BucketTags))
 		if tagsBucket.Get([]byte(tagName)) == nil {
-			// Mantém a consistência de auto-criação da tag
-			if err := tagsBucket.Put([]byte(tagName), []byte("{}")); err != nil {
+			// Injeção do metadado padronizado (local)
+			meta := EncodeTagMeta(TagMeta{Type: TagTypeLocal})
+			if err := tagsBucket.Put([]byte(tagName), meta); err != nil {
 				return fmt.Errorf("falha ao inicializar tag: %w", err)
 			}
 		}
