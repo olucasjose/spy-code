@@ -5,12 +5,10 @@ package storage
 
 import (
 	"fmt"
-	"path/filepath"
-
 	"go.etcd.io/bbolt"
 )
 
-// IgnorePaths move alvos explícitos do fluxo de rastreamento para a denylist da tag.
+// IgnorePaths move alvos pré-processados para a denylist.
 func IgnorePaths(tagName string, targets []string) error {
 	db, err := Open()
 	if err != nil {
@@ -18,20 +16,9 @@ func IgnorePaths(tagName string, targets []string) error {
 	}
 	defer db.Close()
 
-	// Resolve caminhos absolutos antes de travar o banco
-	var absTargets []string
-	for _, t := range targets {
-		absPath, err := filepath.Abs(t)
-		if err != nil {
-			return fmt.Errorf("caminho inválido '%s': %w", t, err)
-		}
-		absTargets = append(absTargets, absPath)
-	}
-
 	return db.Update(func(tx *bbolt.Tx) error {
 		tagsBucket := tx.Bucket([]byte(BucketTags))
 		if tagsBucket.Get([]byte(tagName)) == nil {
-			// Injeção do metadado padronizado (local)
 			meta := EncodeTagMeta(TagMeta{Type: TagTypeLocal})
 			if err := tagsBucket.Put([]byte(tagName), meta); err != nil {
 				return fmt.Errorf("falha ao inicializar tag: %w", err)
@@ -51,15 +38,13 @@ func IgnorePaths(tagName string, targets []string) error {
 			return err
 		}
 
-		for _, absPath := range absTargets {
-			// Remove do mapeamento principal (se estiver lá)
-			if projFiles.Get([]byte(absPath)) != nil {
-				if err := projFiles.Delete([]byte(absPath)); err != nil {
+		for _, path := range targets {
+			if projFiles.Get([]byte(path)) != nil {
+				if err := projFiles.Delete([]byte(path)); err != nil {
 					return err
 				}
 			}
-			// Indexa no Exclusion Index
-			if err := projIgnored.Put([]byte(absPath), []byte("1")); err != nil {
+			if err := projIgnored.Put([]byte(path), []byte("1")); err != nil {
 				return err
 			}
 		}
@@ -67,7 +52,7 @@ func IgnorePaths(tagName string, targets []string) error {
 	})
 }
 
-// GetIgnoredPaths carrega o Exclusion Index da tag em um mapa para lookup O(1) em tempo de execução.
+// GetIgnoredPaths carrega o Exclusion Index da tag em um mapa O(1).
 func GetIgnoredPaths(tagName string) (map[string]bool, error) {
 	db, err := Open()
 	if err != nil {
@@ -93,7 +78,7 @@ func GetIgnoredPaths(tagName string) (map[string]bool, error) {
 	return ignored, err
 }
 
-// UnignorePaths remove alvos da denylist, devolvendo-os ao fluxo de herança original.
+// UnignorePaths remove alvos pré-processados da denylist.
 func UnignorePaths(tagName string, targets []string) error {
 	db, err := Open()
 	if err != nil {
@@ -101,28 +86,18 @@ func UnignorePaths(tagName string, targets []string) error {
 	}
 	defer db.Close()
 
-	var absTargets []string
-	for _, t := range targets {
-		absPath, err := filepath.Abs(t)
-		if err != nil {
-			return fmt.Errorf("caminho inválido '%s': %w", t, err)
-		}
-		absTargets = append(absTargets, absPath)
-	}
-
 	return db.Update(func(tx *bbolt.Tx) error {
 		ignoredBucket := tx.Bucket([]byte(BucketIgnored))
 		if ignoredBucket == nil {
-			return nil // Se não existe bucket, não há o que des-ignorar
+			return nil
 		}
-
 		projIgnored := ignoredBucket.Bucket([]byte(tagName))
 		if projIgnored == nil {
 			return nil
 		}
 
-		for _, absPath := range absTargets {
-			if err := projIgnored.Delete([]byte(absPath)); err != nil {
+		for _, path := range targets {
+			if err := projIgnored.Delete([]byte(path)); err != nil {
 				return err
 			}
 		}

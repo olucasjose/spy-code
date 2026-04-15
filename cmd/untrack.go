@@ -24,14 +24,19 @@ var untrackCmd = &cobra.Command{
 		tagName := args[len(args)-1]
 		targets := args[:len(args)-1]
 
-		for _, target := range targets {
-			if err := storage.UntrackPath(tagName, target); err != nil {
-				// Imprime o erro limpo, preservando a instrução Fail-Fast gerada pelo storage
-				fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
-			} else {
-				fmt.Printf("Alvo '%s' removido da tag '%s'.\n", target, tagName)
-			}
-		}
+		resolvedTargets, err := resolveTagPaths(tagName, targets)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Erro de resolução: %v\n", err)
+					os.Exit(1)
+				}
+		
+				for i, target := range resolvedTargets {
+					if err := storage.UntrackPath(tagName, target); err != nil {
+						fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
+					} else {
+						fmt.Printf("Alvo '%s' removido da tag '%s'.\n", targets[i], tagName)
+					}
+				}
 	},
 }
 

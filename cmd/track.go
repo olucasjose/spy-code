@@ -52,13 +52,19 @@ var trackCmd = &cobra.Command{
 			return
 		}
 
-		// Envia em lote para reconciliação e transação única no banco
-		if err := storage.TrackPaths(tagName, validTargets); err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao rastrear lote: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Printf("%d alvo(s) rastreado(s) com sucesso na tag '%s'.\n", len(validTargets), tagName)
+		resolvedTargets, err := resolveTagPaths(tagName, validTargets)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Erro de resolução: %v\n", err)
+					os.Exit(1)
+				}
+		
+				// Envia em lote para reconciliação e transação única no banco
+				if err := storage.TrackPaths(tagName, resolvedTargets); err != nil {
+					fmt.Fprintf(os.Stderr, "Erro ao rastrear lote: %v\n", err)
+					os.Exit(1)
+				}
+		
+				fmt.Printf("%d alvo(s) rastreado(s) com sucesso na tag '%s'.\n", len(validTargets), tagName)
 	},
 }
 

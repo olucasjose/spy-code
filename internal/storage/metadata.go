@@ -3,7 +3,11 @@
 
 package storage
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"go.etcd.io/bbolt"
+)
 
 const (
 	TagTypeLocal = "local"
@@ -33,4 +37,30 @@ func ParseTagMeta(data []byte) TagMeta {
 func EncodeTagMeta(meta TagMeta) []byte {
 	data, _ := json.Marshal(meta)
 	return data
+}
+
+// GetTagMeta recupera os metadados de uma tag.
+// Retorna fallback local se a tag não existir, mantendo a retrocompatibilidade e a auto-criação.
+func GetTagMeta(tagName string) (TagMeta, error) {
+	db, err := Open()
+	if err != nil {
+		return TagMeta{}, err
+	}
+	defer db.Close()
+
+	var meta TagMeta
+	err = db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(BucketTags))
+		if b == nil {
+			return nil
+		}
+		data := b.Get([]byte(tagName))
+		if data == nil {
+			meta = TagMeta{Type: TagTypeLocal}
+			return nil
+		}
+		meta = ParseTagMeta(data)
+		return nil
+	})
+	return meta, err
 }

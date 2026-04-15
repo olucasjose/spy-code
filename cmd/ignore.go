@@ -26,22 +26,28 @@ var ignoreCmd = &cobra.Command{
 		tagName := args[len(args)-1]
 		targets := args[:len(args)-1]
 
-		// Bifurcação de estado via Flag
-		if ignoreRemove {
-			if err := storage.UnignorePaths(tagName, targets); err != nil {
-				fmt.Fprintf(os.Stderr, "Erro ao remover alvos da denylist: %v\n", err)
-				os.Exit(1)
-			}
-			fmt.Printf("%d alvo(s) removido(s) da denylist da tag '%s'.\n", len(targets), tagName)
-			return
-		}
-
-		if err := storage.IgnorePaths(tagName, targets); err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao ignorar alvos: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Printf("%d alvo(s) adicionado(s) à denylist da tag '%s'.\n", len(targets), tagName)
+		resolvedTargets, err := resolveTagPaths(tagName, targets)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Erro de resolução: %v\n", err)
+					os.Exit(1)
+				}
+		
+				// Bifurcação de estado via Flag
+				if ignoreRemove {
+					if err := storage.UnignorePaths(tagName, resolvedTargets); err != nil {
+						fmt.Fprintf(os.Stderr, "Erro ao remover alvos da denylist: %v\n", err)
+						os.Exit(1)
+					}
+					fmt.Printf("%d alvo(s) removido(s) da denylist da tag '%s'.\n", len(targets), tagName)
+					return
+				}
+		
+				if err := storage.IgnorePaths(tagName, resolvedTargets); err != nil {
+					fmt.Fprintf(os.Stderr, "Erro ao ignorar alvos: %v\n", err)
+					os.Exit(1)
+				}
+		
+				fmt.Printf("%d alvo(s) adicionado(s) à denylist da tag '%s'.\n", len(targets), tagName)
 	},
 }
 
