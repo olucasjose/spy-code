@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"time"
 
 	"tae/internal/storage"
 
@@ -17,7 +19,7 @@ import (
 // BackupSchema define a estrutura do JSON exportado
 type BackupSchema struct {
 	RepoID       string               `json:"repo_id"`
-	RepoName     string               `json:"repo_name,omitempty"` // Adicionado para UX
+	RepoName     string               `json:"repo_name,omitempty"`
 	RepoDenylist []string             `json:"repo_denylist,omitempty"`
 	Tags         map[string]TagBackup `json:"tags,omitempty"`
 }
@@ -29,38 +31,51 @@ type TagBackup struct {
 }
 
 var (
-	backupExport string
-	backupImport string
-	backupAll    bool
-	backupDeny   bool
-	backupTags   bool
-	backupOnly   []string
+	backupAll  bool
+	backupDeny bool
+	backupTags bool
+	backupOnly []string
 )
 
-var gitBackupCmd = &cobra.Command{
-	Use:   "backup",
-	Short: "Gerencia a exportação e importação de tags e denylists atreladas ao repositório Git",
+var gitBackupSaveCmd = &cobra.Command{
+	Use:   "backup-save [diretorio_destino]",
+	Short: "Exporta as tags e denylists do repositório Git para um arquivo JSON",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		if backupExport == "" && backupImport == "" {
-			fmt.Fprintln(os.Stderr, "Erro: Especifique a operação com --export (-e) ou --import (-i).")
-			os.Exit(1)
+		destDir := "."
+		if len(args) == 1 {
+			destDir = args[0]
 		}
-		if backupExport != "" && backupImport != "" {
-			fmt.Fprintln(os.Stderr, "Erro: Não é possível exportar e importar simultaneamente.")
+
+		info, err := os.Stat(destDir)
+		if err != nil || !info.IsDir() {
+			fmt.Fprintf(os.Stderr, "Erro: O destino '%s' não é um diretório válido ou não existe.\n", destDir)
 			os.Exit(1)
 		}
 
 		repoID := getGitRepoID()
+		repoName := getGitRepoName()
+		timestamp := time.Now().Format("20060102_150405")
+		filename := fmt.Sprintf("%s_%s_tae-backup.json", repoName, timestamp)
+		destFile := filepath.Join(destDir, filename)
 
-		if backupExport != "" {
-			executeExport(repoID, backupExport)
-		} else {
-			executeImport(repoID, backupImport)
-		}
+		executeExport(repoID, repoName, destFile)
 	},
 }
 
-func executeExport(repoID, destFile string) {
+var gitBackupRestoreCmd = &cobra.Command{
+	Use:   "backup-restore <arquivo_backup.json>",
+	Short: "Importa tags e denylists de um arquivo de backup para o repositório Git atual",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		srcFile := args[0]
+		repoID := getGitRepoID()
+		
+		executeImport(repoID, srcFile)
+	},
+}
+
+func executeExport(repoID, repoName, destFile string) {
 	if !backupAll && !backupDeny && !backupTags && len(backupOnly) == 0 {
 		fmt.Fprintln(os.Stderr, "Erro: Para exportar, defina o escopo usando --all, --denylist, --tag ou --only.")
 		os.Exit(1)
@@ -75,7 +90,7 @@ func executeExport(repoID, destFile string) {
 
 	backup := BackupSchema{
 		RepoID:   repoID,
-		RepoName: getGitRepoName(), // Injeta o nome amigável no JSON
+		RepoName: repoName,
 		Tags:     make(map[string]TagBackup),
 	}
 
@@ -104,12 +119,12 @@ func executeExport(repoID, destFile string) {
 					tagName := string(k)
 					meta := storage.ParseTagMeta(v)
 
-					// Filtro de Segurança: Só exporta tags do Git atreladas a este repositório
+					// Filtro de Segurança
 					if meta.Type != storage.TagTypeGit || meta.RepoID != repoID {
 						return nil
 					}
 
-					// Filtro de Escopo: Se --only foi usado (e não é --all/--tag), ignora se não estiver na lista
+					// Filtro de Escopo
 					if len(backupOnly) > 0 && !backupAll && !backupTags && !containsString(backupOnly, tagName) {
 						return nil
 					}
@@ -178,7 +193,7 @@ func executeImport(currentRepoID, srcFile string) {
 	if backup.RepoID != currentRepoID {
 		origem := backup.RepoName
 		if origem == "" {
-			origem = backup.RepoID // Fallback para backups antigos
+			origem = backup.RepoID
 		}
 		fmt.Fprintf(os.Stderr, "Erro Fatal: O arquivo de backup pertence ao repositório [%s], mas você está tentando importá-lo no repositório atual. Operação bloqueada para evitar corrupção de rastreamento.\n", origem)
 		os.Exit(1)
@@ -212,7 +227,6 @@ func executeImport(currentRepoID, srcFile string) {
 			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
 			ignoredBucket := tx.Bucket([]byte(storage.BucketIgnored))
 
-			// Na importação, garantimos que o GitRoot seja atualizado para a máquina alvo
 			currentGitRoot := getGitRoot()
 
 			for tagName, tagData := range backup.Tags {
@@ -265,19 +279,18 @@ func containsString(list []string, target string) bool {
 }
 
 func init() {
-	gitBackupCmd.Flags().StringVarP(&backupExport, "export", "e", "", "Arquivo JSON de destino para exportar o backup")
-	gitBackupCmd.Flags().StringVarP(&backupImport, "import", "i", "", "Arquivo JSON fonte para importar o backup")
-	gitBackupCmd.Flags().BoolVarP(&backupAll, "all", "a", false, "Exporta tudo: denylist do repo e todas as tags do git (Requer -e)")
-	gitBackupCmd.Flags().BoolVarP(&backupDeny, "denylist", "d", false, "Exporta a denylist do repositório (Requer -e)")
-	gitBackupCmd.Flags().BoolVarP(&backupTags, "tag", "t", false, "Exporta todas as tags do git e suas denylists (Requer -e)")
-	gitBackupCmd.Flags().StringSliceVarP(&backupOnly, "only", "o", []string{}, "Exporta apenas as tags listadas ou a 'denylist' (Requer -e. Ex: -o tag1,tag2,denylist)")
+	gitBackupSaveCmd.Flags().BoolVarP(&backupAll, "all", "a", false, "Exporta tudo: denylist do repo e todas as tags do git")
+	gitBackupSaveCmd.Flags().BoolVarP(&backupDeny, "denylist", "d", false, "Exporta a denylist do repositório")
+	gitBackupSaveCmd.Flags().BoolVarP(&backupTags, "tag", "t", false, "Exporta todas as tags do git e suas denylists")
+	gitBackupSaveCmd.Flags().StringSliceVarP(&backupOnly, "only", "o", []string{}, "Exporta apenas as tags listadas ou a 'denylist' (Ex: -o tag1,tag2,denylist)")
 
-	gitCmd.AddCommand(gitBackupCmd)
+	gitCmd.AddCommand(gitBackupSaveCmd)
+	gitCmd.AddCommand(gitBackupRestoreCmd)
 
-	// Registra o Autocomplete apenas para a flag --only
-	gitBackupCmd.RegisterFlagCompletionFunc("only", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	// Registra o Autocomplete apenas para a flag --only no comando save
+	gitBackupSaveCmd.RegisterFlagCompletionFunc("only", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		tags, _ := storage.GetAllTags()
-		tags = append(tags, "denylist") // Adiciona a palavra reservada como sugestão
+		tags = append(tags, "denylist")
 		return tags, cobra.ShellCompDirectiveNoSpace | cobra.ShellCompDirectiveNoFileComp
 	})
 }
