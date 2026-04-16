@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"tae/internal/storage"
 
@@ -28,8 +29,8 @@ var renameCmd = &cobra.Command{
 		oldTag := args[0]
 		newTag := args[1]
 
-		if err := storage.RenameTag(oldTag, newTag); err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao renomear tag: %v\n", err)
+		if strings.ToLower(newTag) == "denylist" {
+			fmt.Fprintln(os.Stderr, "Erro: 'denylist' é uma palavra reservada e não pode ser usada como nome de tag.")
 			os.Exit(1)
 		}
 

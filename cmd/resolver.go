@@ -23,7 +23,9 @@ func resolveTagPaths(tagName string, targets []string) ([]string, error) {
 		}
 		currentRepoID := getGitRepoID()
 		if meta.RepoID != "" && meta.RepoID != currentRepoID {
-			return nil, fmt.Errorf("a tag '%s' pertence a outro repositório Git (%s)", tagName, meta.RepoID)
+			displayName := meta.RepoName
+			if displayName == "" { displayName = meta.RepoID } // Fallback
+			return nil, fmt.Errorf("a tag '%s' pertence a outro repositório Git (%s)", tagName, displayName)
 		}
 
 		for _, t := range targets {
@@ -59,7 +61,9 @@ func restorePathsForDisk(tagName string, paths []string) ([]string, error) {
 		// Fallback de retrocompatibilidade para tags criadas antes desta correção
 		if gitRoot == "" {
 			if !isInsideGitRepo() || getGitRepoID() != meta.RepoID {
-				return nil, fmt.Errorf("esta tag não possui a raiz do Git salva. Execute este comando dentro do repositório %s uma vez para que ela seja lida", meta.RepoID)
+				displayName := meta.RepoName
+				if displayName == "" { displayName = meta.RepoID }
+				return nil, fmt.Errorf("esta tag não possui a raiz do Git salva. Execute este comando dentro do repositório [%s] uma vez para que ela seja lida", displayName)
 			}
 			gitRoot = getGitRoot()
 		}

@@ -18,6 +18,7 @@ const (
 type TagMeta struct {
 	Type    string `json:"type"`
 	RepoID  string `json:"repo_id,omitempty"`
+	RepoName string `json:"repo_name,omitempty"`
 	GitRoot string `json:"git_root,omitempty"` // Novo campo para viabilizar operações globais
 }
 

@@ -16,9 +16,10 @@ import (
 
 // BackupSchema define a estrutura do JSON exportado
 type BackupSchema struct {
-	RepoID       string                 `json:"repo_id"`
-	RepoDenylist []string               `json:"repo_denylist,omitempty"`
-	Tags         map[string]TagBackup   `json:"tags,omitempty"`
+	RepoID       string               `json:"repo_id"`
+	RepoName     string               `json:"repo_name,omitempty"` // Adicionado para UX
+	RepoDenylist []string             `json:"repo_denylist,omitempty"`
+	Tags         map[string]TagBackup `json:"tags,omitempty"`
 }
 
 type TagBackup struct {
@@ -73,8 +74,9 @@ func executeExport(repoID, destFile string) {
 	defer db.Close()
 
 	backup := BackupSchema{
-		RepoID: repoID,
-		Tags:   make(map[string]TagBackup),
+		RepoID:   repoID,
+		RepoName: getGitRepoName(), // Injeta o nome amigável no JSON
+		Tags:     make(map[string]TagBackup),
 	}
 
 	err = db.View(func(tx *bbolt.Tx) error {
@@ -174,7 +176,11 @@ func executeImport(currentRepoID, srcFile string) {
 
 	// Barreira de Proteção: Validação de RepoID
 	if backup.RepoID != currentRepoID {
-		fmt.Fprintf(os.Stderr, "Erro Fatal: Você está tentando importar dados do repositório [%s] para o repositório atual [%s]. Operação bloqueada para evitar corrupção de rastreamento.\n", backup.RepoID, currentRepoID)
+		origem := backup.RepoName
+		if origem == "" {
+			origem = backup.RepoID // Fallback para backups antigos
+		}
+		fmt.Fprintf(os.Stderr, "Erro Fatal: O arquivo de backup pertence ao repositório [%s], mas você está tentando importá-lo no repositório atual. Operação bloqueada para evitar corrupção de rastreamento.\n", origem)
 		os.Exit(1)
 	}
 
@@ -190,9 +196,13 @@ func executeImport(currentRepoID, srcFile string) {
 		if len(backup.RepoDenylist) > 0 {
 			gitIgnoredBucket := tx.Bucket([]byte(storage.BucketGitIgnored))
 			repoBucket, err := gitIgnoredBucket.CreateBucketIfNotExists([]byte(currentRepoID))
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			for _, p := range backup.RepoDenylist {
-				if err := repoBucket.Put([]byte(p), []byte("1")); err != nil { return err }
+				if err := repoBucket.Put([]byte(p), []byte("1")); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -208,21 +218,29 @@ func executeImport(currentRepoID, srcFile string) {
 			for tagName, tagData := range backup.Tags {
 				meta := tagData.Meta
 				meta.GitRoot = currentGitRoot
-				
+
 				if err := tagsBucket.Put([]byte(tagName), storage.EncodeTagMeta(meta)); err != nil {
 					return err
 				}
 
 				projFiles, err := filesBucket.CreateBucketIfNotExists([]byte(tagName))
-				if err != nil { return err }
+				if err != nil {
+					return err
+				}
 				for _, p := range tagData.Files {
-					if err := projFiles.Put([]byte(p), []byte("1")); err != nil { return err }
+					if err := projFiles.Put([]byte(p), []byte("1")); err != nil {
+						return err
+					}
 				}
 
 				projIgnored, err := ignoredBucket.CreateBucketIfNotExists([]byte(tagName))
-				if err != nil { return err }
+				if err != nil {
+					return err
+				}
 				for _, p := range tagData.Ignored {
-					if err := projIgnored.Put([]byte(p), []byte("1")); err != nil { return err }
+					if err := projIgnored.Put([]byte(p), []byte("1")); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -239,7 +257,9 @@ func executeImport(currentRepoID, srcFile string) {
 
 func containsString(list []string, target string) bool {
 	for _, s := range list {
-		if s == target { return true }
+		if s == target {
+			return true
+		}
 	}
 	return false
 }
@@ -251,5 +271,13 @@ func init() {
 	gitBackupCmd.Flags().BoolVarP(&backupDeny, "denylist", "d", false, "Exporta a denylist do repositório (Requer -e)")
 	gitBackupCmd.Flags().BoolVarP(&backupTags, "tag", "t", false, "Exporta todas as tags do git e suas denylists (Requer -e)")
 	gitBackupCmd.Flags().StringSliceVarP(&backupOnly, "only", "o", []string{}, "Exporta apenas as tags listadas ou a 'denylist' (Requer -e. Ex: -o tag1,tag2,denylist)")
+
 	gitCmd.AddCommand(gitBackupCmd)
+
+	// Registra o Autocomplete apenas para a flag --only
+	gitBackupCmd.RegisterFlagCompletionFunc("only", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		tags, _ := storage.GetAllTags()
+		tags = append(tags, "denylist") // Adiciona a palavra reservada como sugestão
+		return tags, cobra.ShellCompDirectiveNoSpace | cobra.ShellCompDirectiveNoFileComp
+	})
 }
