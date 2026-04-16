@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 
 	"tae/internal/render"
 	"tae/internal/storage"
@@ -23,6 +24,7 @@ var (
 	listAbsolute bool
 	listExpand   bool
 	listIgnored  bool
+	listDetails  bool
 )
 
 var listCmd = &cobra.Command{
@@ -44,14 +46,44 @@ var listCmd = &cobra.Command{
 				fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
 				os.Exit(1)
 			}
-			fmt.Println("Tags cadastradas:")
+			
+			if !listDetails {
+				fmt.Println("Tags cadastradas:")
+			}
+
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+			if listDetails {
+				fmt.Fprintln(w, "TAG\tTIPO\tREPOSITÓRIO")
+			}
+
 			db.View(func(tx *bbolt.Tx) error {
 				b := tx.Bucket([]byte(storage.BucketTags))
+				if b == nil {
+					return nil
+				}
 				return b.ForEach(func(k, v []byte) error {
-					fmt.Printf("  - %s\n", k)
+					if listDetails {
+						meta := storage.ParseTagMeta(v)
+						if meta.Type == storage.TagTypeGit {
+							repoName := meta.RepoName
+							if repoName == "" {
+								repoName = meta.RepoID // Fallback
+							}
+							fmt.Fprintf(w, "%s\tGit\t%s\n", k, repoName)
+						} else {
+							fmt.Fprintf(w, "%s\tLocal\t\n", k)
+						}
+					} else {
+						fmt.Printf("  - %s\n", k)
+					}
 					return nil
 				})
 			})
+
+			if listDetails {
+				w.Flush()
+			}
+			
 			db.Close() // Fecha e libera o lock do arquivo
 			return
 		}
@@ -179,5 +211,6 @@ func init() {
 	listCmd.Flags().BoolVarP(&listAbsolute, "absolute", "A", false, "Exibe os caminhos absolutos originais sem truncar")
 	listCmd.Flags().BoolVarP(&listExpand, "expand", "e", false, "Expande diretórios lendo o disco físico antes de listar")
 	listCmd.Flags().BoolVarP(&listIgnored, "ignored", "i", false, "Exibe apenas os arquivos na denylist permanente da tag")
+	listCmd.Flags().BoolVarP(&listDetails, "details", "d", false, "Exibe os metadados das tags em colunas, indicando se são Local ou Git")
 	rootCmd.AddCommand(listCmd)
 }
