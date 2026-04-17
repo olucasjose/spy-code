@@ -11,7 +11,6 @@ import (
 	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -38,75 +37,93 @@ var convertCmd = &cobra.Command{
 
 		tagName := args[0]
 
-		db, err := storage.Open()
+		allTags, err := storage.GetAllTagsWithMeta()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Erro ao acessar banco de dados: %v\n", err)
 			os.Exit(1)
 		}
-		defer db.Close()
+		
+		meta, exists := allTags[tagName]
+		if !exists {
+			fmt.Fprintf(os.Stderr, "Erro: a tag '%s' não existe.\n", tagName)
+			os.Exit(1)
+		}
 
-		// Transação atômica
-		err = db.Update(func(tx *bbolt.Tx) error {
-			tagsBucket := tx.Bucket([]byte(storage.BucketTags))
-			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-			ignoredBucket := tx.Bucket([]byte(storage.BucketIgnored))
-
-			tagData := tagsBucket.Get([]byte(tagName))
-			if tagData == nil {
-				return fmt.Errorf("a tag '%s' não existe", tagName)
-			}
-			meta := storage.ParseTagMeta(tagData)
-
-			projFiles := filesBucket.Bucket([]byte(tagName))
-			projIgnored := ignoredBucket.Bucket([]byte(tagName))
-
-			if convertToGit {
-				if meta.Type == storage.TagTypeGit {
-					return fmt.Errorf("a tag '%s' já pertence ao Git", tagName)
-				}
-				if !isInsideGitRepo() {
-					return fmt.Errorf("você precisa estar dentro de um repositório Git para converter esta tag")
-				}
-
-				repoID := getGitRepoID()
-
-				if err := convertBucketToGit(projFiles); err != nil {
-					return fmt.Errorf("arquivos rastreados: %w", err)
-				}
-				if err := convertBucketToGit(projIgnored); err != nil {
-					return fmt.Errorf("denylist: %w", err)
-				}
-
-				meta.Type = storage.TagTypeGit
-				meta.RepoID = repoID
-				meta.RepoName = getGitRepoName()
-				meta.GitRoot = getGitRoot()
-				return tagsBucket.Put([]byte(tagName), storage.EncodeTagMeta(meta))
-
-			} else {
-				if meta.Type == storage.TagTypeLocal {
-					return fmt.Errorf("a tag '%s' já é Local", tagName)
-				}
-				if !isInsideGitRepo() || getGitRepoID() != meta.RepoID {
-					return fmt.Errorf("você precisa estar dentro do repositório Git original (%s) para reverter esta tag", meta.RepoID)
-				}
-
-				gitRoot := getGitRoot()
-
-				if err := convertBucketToLocal(projFiles, gitRoot); err != nil {
-					return fmt.Errorf("arquivos rastreados: %w", err)
-				}
-				if err := convertBucketToLocal(projIgnored, gitRoot); err != nil {
-					return fmt.Errorf("denylist: %w", err)
-				}
-
-				meta.Type = storage.TagTypeLocal
-				meta.RepoID = ""
-				return tagsBucket.Put([]byte(tagName), storage.EncodeTagMeta(meta))
-			}
-		})
-
+		filesKeys, ignoredKeys, err := storage.GetTagRawKeys(tagName)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao ler chaves: %v\n", err)
+			os.Exit(1)
+		}
+
+		swapFiles := make(map[string]string)
+		swapIgnored := make(map[string]string)
+
+		if convertToGit {
+			if meta.Type == storage.TagTypeGit {
+				fmt.Fprintf(os.Stderr, "Erro: a tag '%s' já pertence ao Git.\n", tagName)
+				os.Exit(1)
+			}
+			if !isInsideGitRepo() {
+				fmt.Fprintln(os.Stderr, "Erro: você precisa estar dentro de um repositório Git para converter esta tag.")
+				os.Exit(1)
+			}
+
+			repoID := getGitRepoID()
+
+			for _, k := range filesKeys {
+				relPath, err := getGitRelativePath(k)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Erro: o caminho '%s' está fora do repositório. Mova ou remova-o da tag antes de converter.\n", k)
+					os.Exit(1)
+				}
+				if k != relPath {
+					swapFiles[k] = relPath
+				}
+			}
+			for _, k := range ignoredKeys {
+				relPath, err := getGitRelativePath(k)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Erro: o caminho da denylist '%s' está fora do repositório.\n", k)
+					os.Exit(1)
+				}
+				if k != relPath {
+					swapIgnored[k] = relPath
+				}
+			}
+
+			meta.Type = storage.TagTypeGit
+			meta.RepoID = repoID
+			meta.RepoName = getGitRepoName()
+			meta.GitRoot = getGitRoot()
+
+		} else {
+			if meta.Type == storage.TagTypeLocal {
+				fmt.Fprintf(os.Stderr, "Erro: a tag '%s' já é Local.\n", tagName)
+				os.Exit(1)
+			}
+			if !isInsideGitRepo() || getGitRepoID() != meta.RepoID {
+				fmt.Fprintf(os.Stderr, "Erro: você precisa estar dentro do repositório Git original (%s) para reverter esta tag.\n", meta.RepoID)
+				os.Exit(1)
+			}
+
+			gitRoot := getGitRoot()
+
+			for _, k := range filesKeys {
+				absPath := filepath.ToSlash(filepath.Join(gitRoot, k))
+				swapFiles[k] = absPath
+			}
+			for _, k := range ignoredKeys {
+				absPath := filepath.ToSlash(filepath.Join(gitRoot, k))
+				swapIgnored[k] = absPath
+			}
+
+			meta.Type = storage.TagTypeLocal
+			meta.RepoID = ""
+			meta.RepoName = ""
+			meta.GitRoot = ""
+		}
+
+		if err := storage.UpdateTagScope(tagName, meta, swapFiles, swapIgnored); err != nil {
 			fmt.Fprintf(os.Stderr, "Operação abortada. O banco não foi modificado.\nErro: %v\n", err)
 			os.Exit(1)
 		}
@@ -123,65 +140,4 @@ func init() {
 	convertCmd.Flags().BoolVarP(&convertToGit, "git", "g", false, "Converte uma tag Local para Git")
 	convertCmd.Flags().BoolVarP(&convertToTae, "tae", "t", false, "Converte uma tag Git para Local (Tae)")
 	rootCmd.AddCommand(convertCmd)
-}
-
-func convertBucketToGit(b *bbolt.Bucket) error {
-	if b == nil {
-		return nil
-	}
-
-	var toAdd [][]byte
-	var toDelete [][]byte
-
-	err := b.ForEach(func(k, v []byte) error {
-		relPath, err := getGitRelativePath(string(k))
-		if err != nil {
-			return fmt.Errorf("o caminho '%s' está fora do repositório. Mova ou remova-o da tag antes de converter", string(k))
-		}
-		if string(k) != relPath {
-			toDelete = append(toDelete, k)
-			toAdd = append(toAdd, []byte(relPath))
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	for _, k := range toDelete {
-		_ = b.Delete(k)
-	}
-	for _, k := range toAdd {
-		_ = b.Put(k, []byte("1"))
-	}
-
-	return nil
-}
-
-func convertBucketToLocal(b *bbolt.Bucket, gitRoot string) error {
-	if b == nil {
-		return nil
-	}
-
-	var toAdd [][]byte
-	var toDelete [][]byte
-
-	err := b.ForEach(func(k, v []byte) error {
-		absPath := filepath.ToSlash(filepath.Join(gitRoot, string(k)))
-		toDelete = append(toDelete, k)
-		toAdd = append(toAdd, []byte(absPath))
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	for _, k := range toDelete {
-		_ = b.Delete(k)
-	}
-	for _, k := range toAdd {
-		_ = b.Put(k, []byte("1"))
-	}
-
-	return nil
 }

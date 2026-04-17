@@ -12,7 +12,6 @@ import (
 	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -40,98 +39,50 @@ var pruneCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		db, err := storage.Open()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
-			os.Exit(1)
+		var targetTags []string
+		if pruneAll {
+			tagsMeta, _ := storage.GetAllTagsWithMeta()
+			for t := range tagsMeta {
+				targetTags = append(targetTags, t)
+			}
+		} else {
+			targetTags = args
 		}
-		defer db.Close()
 
-		ghostsFilesByTag := make(map[string][][]byte)
-		ghostsIgnoredByTag := make(map[string][][]byte)
+		ghostsFilesByTag := make(map[string][]string)
+		ghostsIgnoredByTag := make(map[string][]string)
 		totalGhosts := 0
 
-		// Etapa 1: Escaneamento (View transacional - Não bloqueia o banco)
-		err = db.View(func(tx *bbolt.Tx) error {
-			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-			ignoredBucket := tx.Bucket([]byte(storage.BucketIgnored))
-
-			var targetTags []string
-			if pruneAll {
-				tagsBucket := tx.Bucket([]byte(storage.BucketTags))
-				if tagsBucket != nil {
-					_ = tagsBucket.ForEach(func(k, v []byte) error {
-						targetTags = append(targetTags, string(k))
-						return nil
-					})
-				}
-			} else {
-				targetTags = args
+		// Etapa 1: Escaneamento em memória (sem bloquear banco)
+		for _, tagName := range targetTags {
+			rawFiles, rawIgnored, err := storage.GetTagRawKeys(tagName)
+			if err != nil {
+				continue
 			}
 
-			for _, tagName := range targetTags {
-				var rawFiles [][]byte
-				var rawIgnored [][]byte
+			resolvedFiles, errF := restorePathsForDisk(tagName, rawFiles)
+			resolvedIgnored, errI := restorePathsForDisk(tagName, rawIgnored)
 
-				if filesBucket != nil {
-					if projFiles := filesBucket.Bucket([]byte(tagName)); projFiles != nil {
-						_ = projFiles.ForEach(func(k, v []byte) error {
-							rawFiles = append(rawFiles, k)
-							return nil
-						})
+			if errF == nil {
+				for i, p := range resolvedFiles {
+					if _, err := os.Stat(p); os.IsNotExist(err) {
+						ghostsFilesByTag[tagName] = append(ghostsFilesByTag[tagName], rawFiles[i])
+						totalGhosts++
 					}
-				}
-
-				if ignoredBucket != nil {
-					if projIgnored := ignoredBucket.Bucket([]byte(tagName)); projIgnored != nil {
-						_ = projIgnored.ForEach(func(k, v []byte) error {
-							rawIgnored = append(rawIgnored, k)
-							return nil
-						})
-					}
-				}
-
-				// Tradução de contexto para o disco físico
-				var strFiles, strIgnored []string
-				for _, k := range rawFiles {
-					strFiles = append(strFiles, string(k))
-				}
-				for _, k := range rawIgnored {
-					strIgnored = append(strIgnored, string(k))
-				}
-
-				resolvedFiles, errF := restorePathsForDisk(tagName, strFiles)
-				resolvedIgnored, errI := restorePathsForDisk(tagName, strIgnored)
-
-				// Se a tag for do Git e estivermos fora do repositório, ignoramos a exclusão
-				// para não corromper o banco com falsos positivos.
-				if errF == nil {
-					for i, p := range resolvedFiles {
-						if _, err := os.Stat(p); os.IsNotExist(err) {
-							ghostsFilesByTag[tagName] = append(ghostsFilesByTag[tagName], rawFiles[i])
-							totalGhosts++
-						}
-					}
-				}
-				if errI == nil {
-					for i, p := range resolvedIgnored {
-						if _, err := os.Stat(p); os.IsNotExist(err) {
-							ghostsIgnoredByTag[tagName] = append(ghostsIgnoredByTag[tagName], rawIgnored[i])
-							totalGhosts++
-						}
-					}
-				}
-
-				if !pruneAll && !pruneQuiet && len(ghostsFilesByTag[tagName]) == 0 && len(ghostsIgnoredByTag[tagName]) == 0 {
-					fmt.Printf("Verificando tag '%s'...\n", tagName)
 				}
 			}
-			return nil
-		})
+			if errI == nil {
+				for i, p := range resolvedIgnored {
+					if _, err := os.Stat(p); os.IsNotExist(err) {
+						ghostsIgnoredByTag[tagName] = append(ghostsIgnoredByTag[tagName], rawIgnored[i])
+						totalGhosts++
+					}
+				}
+			}
 
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro durante a leitura do banco de dados: %v\n", err)
-			os.Exit(1)
+			if !pruneAll && !pruneQuiet && len(ghostsFilesByTag[tagName]) == 0 && len(ghostsIgnoredByTag[tagName]) == 0 {
+				fmt.Printf("Verificando tag '%s'...\n", tagName)
+			}
 		}
 
 		// Etapa 2: Exibição e Interação
@@ -143,7 +94,6 @@ var pruneCmd = &cobra.Command{
 		}
 
 		if !pruneQuiet {
-			// Agrupa a exibição para o usuário
 			allTagsMap := make(map[string]bool)
 			for t := range ghostsFilesByTag {
 				allTagsMap[t] = true
@@ -158,10 +108,10 @@ var pruneCmd = &cobra.Command{
 				if fLen > 0 || iLen > 0 {
 					fmt.Printf("Tag '%s': %d arquivo(s) fantasma(s) detectado(s).\n", tagName, fLen+iLen)
 					for _, k := range ghostsFilesByTag[tagName] {
-						fmt.Printf("  - %s [Rastreado]\n", string(k))
+						fmt.Printf("  - %s [Rastreado]\n", k)
 					}
 					for _, k := range ghostsIgnoredByTag[tagName] {
-						fmt.Printf("  - %s [Denylist]\n", string(k))
+						fmt.Printf("  - %s [Denylist]\n", k)
 					}
 				}
 			}
@@ -186,41 +136,18 @@ var pruneCmd = &cobra.Command{
 		}
 
 		// Etapa 3: Execução Destrutiva
-		err = db.Update(func(tx *bbolt.Tx) error {
-			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-			ignoredBucket := tx.Bucket([]byte(storage.BucketIgnored))
-
-			// Limpa rastreados
-			if filesBucket != nil {
-				for tagName, keys := range ghostsFilesByTag {
-					if projFiles := filesBucket.Bucket([]byte(tagName)); projFiles != nil {
-						for _, k := range keys {
-							if err := projFiles.Delete(k); err != nil {
-								return fmt.Errorf("falha ao remover chave de rastreamento '%s': %w", string(k), err)
-							}
-						}
-					}
+		for tagName := range ghostsFilesByTag {
+			if err := storage.RemoveKeysFromTag(tagName, ghostsFilesByTag[tagName], ghostsIgnoredByTag[tagName]); err != nil {
+				fmt.Fprintf(os.Stderr, "Erro ao limpar tag '%s': %v\n", tagName, err)
+			}
+		}
+		
+		for tagName := range ghostsIgnoredByTag {
+			if _, exists := ghostsFilesByTag[tagName]; !exists {
+				if err := storage.RemoveKeysFromTag(tagName, nil, ghostsIgnoredByTag[tagName]); err != nil {
+					fmt.Fprintf(os.Stderr, "Erro ao limpar tag '%s': %v\n", tagName, err)
 				}
 			}
-
-			// Limpa denylist
-			if ignoredBucket != nil {
-				for tagName, keys := range ghostsIgnoredByTag {
-					if projIgnored := ignoredBucket.Bucket([]byte(tagName)); projIgnored != nil {
-						for _, k := range keys {
-							if err := projIgnored.Delete(k); err != nil {
-								return fmt.Errorf("falha ao remover chave da denylist '%s': %w", string(k), err)
-							}
-						}
-					}
-				}
-			}
-			return nil
-		})
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro fatal na transação de deleção: %v\n", err)
-			os.Exit(1)
 		}
 
 		if !pruneQuiet {
