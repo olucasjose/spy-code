@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"tae/internal/storage"
@@ -25,21 +24,20 @@ var renameCmd = &cobra.Command{
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		oldTag := args[0]
 		newTag := args[1]
 
 		if strings.ToLower(newTag) == "denylist" {
-			fmt.Fprintln(os.Stderr, "Erro: 'denylist' é uma palavra reservada e não pode ser usada como nome de tag.")
-			os.Exit(1)
+			return fmt.Errorf("'denylist' é uma palavra reservada e não pode ser usada como nome de tag")
 		}
 
 		if err := storage.RenameTag(oldTag, newTag); err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao renomear tag: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("erro ao renomear tag: %w", err)
 		}
 
 		fmt.Printf("Tag '%s' renomeada para '%s' com sucesso.\n", oldTag, newTag)
+		return nil
 	},
 }
 

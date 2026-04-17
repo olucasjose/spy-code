@@ -24,7 +24,7 @@ var trackCmd = &cobra.Command{
 		tags, _ := storage.GetAllTags()
 		return tags, cobra.ShellCompDirectiveDefault
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		tagName := args[len(args)-1]
 		rawTargets := args[:len(args)-1]
 
@@ -41,7 +41,7 @@ var trackCmd = &cobra.Command{
 			}
 
 			if _, err := os.Stat(target); os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "Aviso: O alvo '%s' não existe no disco. Ignorando.\n", target)
+				fmt.Printf("Aviso: O alvo '%s' não existe no disco. Ignorando.\n", target)
 				continue
 			}
 			validTargets = append(validTargets, target)
@@ -49,28 +49,25 @@ var trackCmd = &cobra.Command{
 
 		if len(validTargets) == 0 {
 			fmt.Println("Nenhum alvo válido para rastrear.")
-			return
+			return nil
 		}
 
 		resolvedTargets, err := resolveTagPaths(tagName, validTargets)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Erro de resolução: %v\n", err)
-					os.Exit(1)
-				}
-		
-				// Envia em lote para reconciliação e transação única no banco
-				if err := storage.TrackPaths(tagName, resolvedTargets); err != nil {
-					fmt.Fprintf(os.Stderr, "Erro ao rastrear lote: %v\n", err)
-					os.Exit(1)
-				}
-		
-				fmt.Printf("%d alvo(s) rastreado(s) com sucesso na tag '%s'.\n", len(validTargets), tagName)
+		if err != nil {
+			return fmt.Errorf("erro de resolução: %w", err)
+		}
+
+		// Envia em lote para reconciliação e transação única no banco
+		if err := storage.TrackPaths(tagName, resolvedTargets); err != nil {
+			return fmt.Errorf("erro ao rastrear lote: %w", err)
+		}
+
+		fmt.Printf("%d alvo(s) rastreado(s) com sucesso na tag '%s'.\n", len(validTargets), tagName)
+		return nil
 	},
 }
 
 // shouldIgnore avalia se o target bate com algum padrão.
-// O filepath.Match não cruza delimitadores de caminho com '*',
-// o que atende à regra de ignorar apenas arquivos rasos da pasta atual.
 func shouldIgnore(target string, patterns []string) bool {
 	if len(patterns) == 0 {
 		return false

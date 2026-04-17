@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"tae/internal/storage"
 
@@ -20,23 +19,23 @@ var untrackCmd = &cobra.Command{
 		tags, _ := storage.GetAllTags()
 		return tags, cobra.ShellCompDirectiveDefault
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		tagName := args[len(args)-1]
 		targets := args[:len(args)-1]
 
 		resolvedTargets, err := resolveTagPaths(tagName, targets)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Erro de resolução: %v\n", err)
-					os.Exit(1)
-				}
-		
-				for i, target := range resolvedTargets {
-					if err := storage.UntrackPath(tagName, target); err != nil {
-						fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
-					} else {
-						fmt.Printf("Alvo '%s' removido da tag '%s'.\n", targets[i], tagName)
-					}
-				}
+		if err != nil {
+			return fmt.Errorf("erro de resolução: %w", err)
+		}
+
+		for i, target := range resolvedTargets {
+			if err := storage.UntrackPath(tagName, target); err != nil {
+				// Falha rápida se houver erro ao destrackear
+				return fmt.Errorf("erro ao remover alvo '%s': %w", targets[i], err)
+			}
+			fmt.Printf("Alvo '%s' removido da tag '%s'.\n", targets[i], tagName)
+		}
+		return nil
 	},
 }
 

@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"tae/internal/storage"
@@ -29,30 +28,26 @@ var convertCmd = &cobra.Command{
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if convertToGit == convertToTae {
-			fmt.Fprintln(os.Stderr, "Erro: Use --git (-g) OU --tae (-t) para definir o destino da conversão.")
-			os.Exit(1)
+			return fmt.Errorf("use --git (-g) OU --tae (-t) para definir o destino da conversão")
 		}
 
 		tagName := args[0]
 
 		allTags, err := storage.GetAllTagsWithMeta()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao acessar banco de dados: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("erro ao acessar banco de dados: %w", err)
 		}
-		
+
 		meta, exists := allTags[tagName]
 		if !exists {
-			fmt.Fprintf(os.Stderr, "Erro: a tag '%s' não existe.\n", tagName)
-			os.Exit(1)
+			return fmt.Errorf("a tag '%s' não existe", tagName)
 		}
 
 		filesKeys, ignoredKeys, err := storage.GetTagRawKeys(tagName)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao ler chaves: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("erro ao ler chaves: %w", err)
 		}
 
 		swapFiles := make(map[string]string)
@@ -60,12 +55,10 @@ var convertCmd = &cobra.Command{
 
 		if convertToGit {
 			if meta.Type == storage.TagTypeGit {
-				fmt.Fprintf(os.Stderr, "Erro: a tag '%s' já pertence ao Git.\n", tagName)
-				os.Exit(1)
+				return fmt.Errorf("a tag '%s' já pertence ao Git")
 			}
 			if !isInsideGitRepo() {
-				fmt.Fprintln(os.Stderr, "Erro: você precisa estar dentro de um repositório Git para converter esta tag.")
-				os.Exit(1)
+				return fmt.Errorf("você precisa estar dentro de um repositório Git para converter esta tag")
 			}
 
 			repoID := getGitRepoID()
@@ -73,8 +66,7 @@ var convertCmd = &cobra.Command{
 			for _, k := range filesKeys {
 				relPath, err := getGitRelativePath(k)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Erro: o caminho '%s' está fora do repositório. Mova ou remova-o da tag antes de converter.\n", k)
-					os.Exit(1)
+					return fmt.Errorf("o caminho '%s' está fora do repositório. Mova ou remova-o da tag antes de converter", k)
 				}
 				if k != relPath {
 					swapFiles[k] = relPath
@@ -83,8 +75,7 @@ var convertCmd = &cobra.Command{
 			for _, k := range ignoredKeys {
 				relPath, err := getGitRelativePath(k)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Erro: o caminho da denylist '%s' está fora do repositório.\n", k)
-					os.Exit(1)
+					return fmt.Errorf("o caminho da denylist '%s' está fora do repositório", k)
 				}
 				if k != relPath {
 					swapIgnored[k] = relPath
@@ -98,12 +89,10 @@ var convertCmd = &cobra.Command{
 
 		} else {
 			if meta.Type == storage.TagTypeLocal {
-				fmt.Fprintf(os.Stderr, "Erro: a tag '%s' já é Local.\n", tagName)
-				os.Exit(1)
+				return fmt.Errorf("a tag '%s' já é Local")
 			}
 			if !isInsideGitRepo() || getGitRepoID() != meta.RepoID {
-				fmt.Fprintf(os.Stderr, "Erro: você precisa estar dentro do repositório Git original (%s) para reverter esta tag.\n", meta.RepoID)
-				os.Exit(1)
+				return fmt.Errorf("você precisa estar dentro do repositório Git original (%s) para reverter esta tag", meta.RepoID)
 			}
 
 			gitRoot := getGitRoot()
@@ -124,8 +113,7 @@ var convertCmd = &cobra.Command{
 		}
 
 		if err := storage.UpdateTagScope(tagName, meta, swapFiles, swapIgnored); err != nil {
-			fmt.Fprintf(os.Stderr, "Operação abortada. O banco não foi modificado.\nErro: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("operação abortada. O banco não foi modificado. Erro: %w", err)
 		}
 
 		if convertToGit {
@@ -133,6 +121,7 @@ var convertCmd = &cobra.Command{
 		} else {
 			fmt.Printf("Sucesso: A tag '%s' foi convertida para escopo Local (Tae).\n", tagName)
 		}
+		return nil
 	},
 }
 

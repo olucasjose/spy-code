@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"tae/internal/storage"
@@ -19,19 +18,17 @@ var createCmd = &cobra.Command{
 	Use:   "create <nome1> [nome2...]",
 	Short: "Cria uma ou mais tags de rastreamento no banco de dados",
 	Args:  cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		for _, tagName := range args {
 			if strings.ToLower(tagName) == "denylist" {
-				fmt.Fprintln(os.Stderr, "Erro: 'denylist' é uma palavra reservada do sistema e não pode ser usada como nome de tag.")
-				os.Exit(1)
+				return fmt.Errorf("'denylist' é uma palavra reservada do sistema e não pode ser usada como nome de tag")
 			}
 		}
 
 		var repoID, repoName string
 		if createGit {
 			if !isInsideGitRepo() {
-				fmt.Fprintln(os.Stderr, "Erro: A flag --git exige que o comando seja executado dentro de um repositório Git.")
-				os.Exit(1)
+				return fmt.Errorf("a flag --git exige que o comando seja executado dentro de um repositório Git")
 			}
 			repoID = getGitRepoID()
 			repoName = getGitRepoName()
@@ -48,8 +45,7 @@ var createCmd = &cobra.Command{
 		}
 
 		if err := storage.CreateTags(args, meta); err != nil {
-			fmt.Fprintf(os.Stderr, "Erro na transação: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("erro na transação: %w", err)
 		}
 
 		if createGit {
@@ -57,6 +53,7 @@ var createCmd = &cobra.Command{
 		} else {
 			fmt.Printf("Tag(s) Local(is) criada(s) com sucesso: %v\n", args)
 		}
+		return nil
 	},
 }
 
