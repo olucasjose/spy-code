@@ -34,6 +34,11 @@ var renameCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		if err := storage.RenameTag(oldTag, newTag); err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao renomear tag: %v\n", err)
+			os.Exit(1)
+		}
+
 		fmt.Printf("Tag '%s' renomeada para '%s' com sucesso.\n", oldTag, newTag)
 	},
 }
