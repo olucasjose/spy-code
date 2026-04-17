@@ -4,10 +4,9 @@
 package storage
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
-
-	"go.etcd.io/bbolt"
 )
 
 // CreateTags cadastra múltiplas tags no banco de forma atômica.
@@ -18,27 +17,41 @@ func CreateTags(tags []string, meta TagMeta) error {
 	}
 	defer db.Close()
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(BucketTags))
-		
-		for _, tagName := range tags {
-			if b.Get([]byte(tagName)) != nil {
-				return fmt.Errorf("a tag '%s' já existe. Operação abortada", tagName)
-			}
-		}
-		
-		encodedMeta := EncodeTagMeta(meta)
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-		for _, tagName := range tags {
-			if err := b.Put([]byte(tagName), encodedMeta); err != nil {
-				return fmt.Errorf("erro ao gravar tag '%s': %w", tagName, err)
-			}
+	// Validação Fail-Fast
+	for _, tagName := range tags {
+		var exists int
+		err := tx.QueryRow("SELECT 1 FROM tags WHERE name = ?", tagName).Scan(&exists)
+		if err != sql.ErrNoRows && err != nil {
+			return fmt.Errorf("erro ao verificar existência da tag '%s': %w", tagName, err)
 		}
-		return nil
-	})
+		if exists == 1 {
+			return fmt.Errorf("a tag '%s' já existe. Operação abortada", tagName)
+		}
+	}
+
+	stmt, err := tx.Prepare("INSERT INTO tags (name, type, repo_id, repo_name, git_root) VALUES (?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, tagName := range tags {
+		_, err := stmt.Exec(tagName, meta.Type, meta.RepoID, meta.RepoName, meta.GitRoot)
+		if err != nil {
+			return fmt.Errorf("erro ao gravar tag '%s': %w", tagName, err)
+		}
+	}
+
+	return tx.Commit()
 }
 
-// DeleteTags remove as tags e seus respectivos buckets de rastreamento em uma transação única.
+// DeleteTags remove as tags e aciona em cascata a limpeza de seus arquivos rastreados.
 func DeleteTags(tags []string) error {
 	db, err := Open()
 	if err != nil {
@@ -46,37 +59,43 @@ func DeleteTags(tags []string) error {
 	}
 	defer db.Close()
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		tagsBucket := tx.Bucket([]byte(BucketTags))
-		filesBucket := tx.Bucket([]byte(BucketFiles))
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-		var missingTags []string
+	var missingTags []string
 
-		// Validação Fail-Fast Acumulativa
-		for _, tagName := range tags {
-			if tagsBucket.Get([]byte(tagName)) == nil {
-				missingTags = append(missingTags, tagName)
-			}
+	// Validação Fail-Fast Acumulativa
+	for _, tagName := range tags {
+		var exists int
+		err := tx.QueryRow("SELECT 1 FROM tags WHERE name = ?", tagName).Scan(&exists)
+		if err == sql.ErrNoRows {
+			missingTags = append(missingTags, tagName)
+		} else if err != nil {
+			return err
 		}
+	}
 
-		if len(missingTags) > 0 {
-			return fmt.Errorf("as seguintes tags não existem: %s. Operação abortada", strings.Join(missingTags, ", "))
+	if len(missingTags) > 0 {
+		return fmt.Errorf("as seguintes tags não existem: %s. Operação abortada", strings.Join(missingTags, ", "))
+	}
+
+	// Execução destrutiva
+	stmt, err := tx.Prepare("DELETE FROM tags WHERE name = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, tagName := range tags {
+		if _, err := stmt.Exec(tagName); err != nil {
+			return fmt.Errorf("falha ao remover referência da tag '%s': %w", tagName, err)
 		}
+	}
 
-		// Execução destrutiva
-		for _, tagName := range tags {
-			if err := tagsBucket.Delete([]byte(tagName)); err != nil {
-				return fmt.Errorf("falha ao remover referência da tag '%s': %w", tagName, err)
-			}
-
-			if filesBucket.Bucket([]byte(tagName)) != nil {
-				if err := filesBucket.DeleteBucket([]byte(tagName)); err != nil {
-					return fmt.Errorf("falha ao remover rastreamento da tag '%s': %w", tagName, err)
-				}
-			}
-		}
-		return nil
-	})
+	return tx.Commit()
 }
 
 // GetFilesByTag retorna a lista plana de todos os caminhos rastreados por uma tag.
@@ -87,23 +106,21 @@ func GetFilesByTag(tagName string) ([]string, error) {
 	}
 	defer db.Close()
 
-	var files []string
-	err = db.View(func(tx *bbolt.Tx) error {
-		filesBucket := tx.Bucket([]byte(BucketFiles))
-		if filesBucket == nil {
-			return nil
-		}
-		projFiles := filesBucket.Bucket([]byte(tagName))
-		if projFiles == nil {
-			return nil
-		}
+	rows, err := db.Query("SELECT path FROM files_tracked WHERE tag_name = ?", tagName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-		return projFiles.ForEach(func(k, v []byte) error {
-			files = append(files, string(k))
-			return nil
-		})
-	})
-	return files, err
+	var files []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		files = append(files, path)
+	}
+	return files, rows.Err()
 }
 
 // GetAllTagsWithMeta recupera o dicionário completo de tags e seus metadados para varreduras de listagem.
@@ -114,16 +131,33 @@ func GetAllTagsWithMeta() (map[string]TagMeta, error) {
 	}
 	defer db.Close()
 
+	rows, err := db.Query("SELECT name, type, repo_id, repo_name, git_root FROM tags")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
 	tags := make(map[string]TagMeta)
-	err = db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(BucketTags))
-		if b == nil {
-			return nil
+	for rows.Next() {
+		var name string
+		var meta TagMeta
+		var repoID, repoName, gitRoot sql.NullString
+
+		if err := rows.Scan(&name, &meta.Type, &repoID, &repoName, &gitRoot); err != nil {
+			return nil, err
 		}
-		return b.ForEach(func(k, v []byte) error {
-			tags[string(k)] = ParseTagMeta(v)
-			return nil
-		})
-	})
-	return tags, err
+
+		if repoID.Valid {
+			meta.RepoID = repoID.String
+		}
+		if repoName.Valid {
+			meta.RepoName = repoName.String
+		}
+		if gitRoot.Valid {
+			meta.GitRoot = gitRoot.String
+		}
+
+		tags[name] = meta
+	}
+	return tags, rows.Err()
 }

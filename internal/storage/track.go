@@ -4,8 +4,8 @@
 package storage
 
 import (
+	"database/sql"
 	"fmt"
-	"go.etcd.io/bbolt"
 )
 
 // TrackPaths recebe caminhos já processados pelo resolver e insere no rastreamento.
@@ -16,39 +16,48 @@ func TrackPaths(tagName string, targets []string) error {
 	}
 	defer db.Close()
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		projBucket := tx.Bucket([]byte(BucketTags))
-		if projBucket.Get([]byte(tagName)) == nil {
-			meta := EncodeTagMeta(TagMeta{Type: TagTypeLocal})
-			if err := projBucket.Put([]byte(tagName), meta); err != nil {
-				return fmt.Errorf("falha ao criar tag '%s' automaticamente: %w", tagName, err)
-			}
-		}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-		filesBucket := tx.Bucket([]byte(BucketFiles))
-		projFiles, err := filesBucket.CreateBucketIfNotExists([]byte(tagName))
+	// Garante a existência da tag (cria como Local se não existir)
+	var exists int
+	err = tx.QueryRow("SELECT 1 FROM tags WHERE name = ?", tagName).Scan(&exists)
+	if err == sql.ErrNoRows {
+		_, err = tx.Exec("INSERT INTO tags (name, type) VALUES (?, ?)", tagName, TagTypeLocal)
 		if err != nil {
+			return fmt.Errorf("falha ao criar tag '%s' automaticamente: %w", tagName, err)
+		}
+	} else if err != nil {
+		return err
+	}
+
+	delStmt, err := tx.Prepare("DELETE FROM files_ignored WHERE tag_name = ? AND path = ?")
+	if err != nil {
+		return err
+	}
+	defer delStmt.Close()
+
+	insStmt, err := tx.Prepare("INSERT OR IGNORE INTO files_tracked (tag_name, path) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insStmt.Close()
+
+	for _, path := range targets {
+		// Remove da denylist se estiver lá
+		if _, err := delStmt.Exec(tagName, path); err != nil {
 			return err
 		}
-
-		ignoredBucket := tx.Bucket([]byte(BucketIgnored))
-		projIgnored, err := ignoredBucket.CreateBucketIfNotExists([]byte(tagName))
-		if err != nil {
+		// Insere no rastreamento
+		if _, err := insStmt.Exec(tagName, path); err != nil {
 			return err
 		}
+	}
 
-		for _, path := range targets {
-			if projIgnored.Get([]byte(path)) != nil {
-				if err := projIgnored.Delete([]byte(path)); err != nil {
-					return err
-				}
-			}
-			if err := projFiles.Put([]byte(path), []byte("1")); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return tx.Commit()
 }
 
 // UntrackPath remove um caminho pré-processado da tag.
@@ -59,20 +68,19 @@ func UntrackPath(tagName, targetPath string) error {
 	}
 	defer db.Close()
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		filesBucket := tx.Bucket([]byte(BucketFiles))
-		if filesBucket == nil {
-			return nil
-		}
-		projFiles := filesBucket.Bucket([]byte(tagName))
-		if projFiles == nil {
-			return fmt.Errorf("tag '%s' não possui arquivos rastreados", tagName)
-		}
+	res, err := db.Exec("DELETE FROM files_tracked WHERE tag_name = ? AND path = ?", tagName, targetPath)
+	if err != nil {
+		return err
+	}
 
-		if projFiles.Get([]byte(targetPath)) == nil {
-			return fmt.Errorf("o alvo '%s' não está rastreado diretamente", targetPath)
-		}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
 
-		return projFiles.Delete([]byte(targetPath))
-	})
+	if rowsAffected == 0 {
+		return fmt.Errorf("o alvo '%s' não está rastreado diretamente na tag '%s'", targetPath, tagName)
+	}
+
+	return nil
 }

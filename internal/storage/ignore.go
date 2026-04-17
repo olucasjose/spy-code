@@ -4,8 +4,8 @@
 package storage
 
 import (
+	"database/sql"
 	"fmt"
-	"go.etcd.io/bbolt"
 )
 
 // IgnorePaths move alvos pré-processados para a denylist.
@@ -16,40 +16,48 @@ func IgnorePaths(tagName string, targets []string) error {
 	}
 	defer db.Close()
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		tagsBucket := tx.Bucket([]byte(BucketTags))
-		if tagsBucket.Get([]byte(tagName)) == nil {
-			meta := EncodeTagMeta(TagMeta{Type: TagTypeLocal})
-			if err := tagsBucket.Put([]byte(tagName), meta); err != nil {
-				return fmt.Errorf("falha ao inicializar tag: %w", err)
-			}
-		}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-		filesBucket := tx.Bucket([]byte(BucketFiles))
-		ignoredBucket := tx.Bucket([]byte(BucketIgnored))
-
-		projFiles, err := filesBucket.CreateBucketIfNotExists([]byte(tagName))
+	// Garante a existência da tag
+	var exists int
+	err = tx.QueryRow("SELECT 1 FROM tags WHERE name = ?", tagName).Scan(&exists)
+	if err == sql.ErrNoRows {
+		_, err = tx.Exec("INSERT INTO tags (name, type) VALUES (?, ?)", tagName, TagTypeLocal)
 		if err != nil {
+			return fmt.Errorf("falha ao inicializar tag '%s': %w", tagName, err)
+		}
+	} else if err != nil {
+		return err
+	}
+
+	delStmt, err := tx.Prepare("DELETE FROM files_tracked WHERE tag_name = ? AND path = ?")
+	if err != nil {
+		return err
+	}
+	defer delStmt.Close()
+
+	insStmt, err := tx.Prepare("INSERT OR IGNORE INTO files_ignored (tag_name, path) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insStmt.Close()
+
+	for _, path := range targets {
+		// Remove do rastreamento se estiver lá
+		if _, err := delStmt.Exec(tagName, path); err != nil {
 			return err
 		}
-
-		projIgnored, err := ignoredBucket.CreateBucketIfNotExists([]byte(tagName))
-		if err != nil {
+		// Move para ignorados
+		if _, err := insStmt.Exec(tagName, path); err != nil {
 			return err
 		}
+	}
 
-		for _, path := range targets {
-			if projFiles.Get([]byte(path)) != nil {
-				if err := projFiles.Delete([]byte(path)); err != nil {
-					return err
-				}
-			}
-			if err := projIgnored.Put([]byte(path), []byte("1")); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return tx.Commit()
 }
 
 // GetIgnoredPaths carrega o Exclusion Index da tag em um mapa O(1).
@@ -60,22 +68,21 @@ func GetIgnoredPaths(tagName string) (map[string]bool, error) {
 	}
 	defer db.Close()
 
+	rows, err := db.Query("SELECT path FROM files_ignored WHERE tag_name = ?", tagName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
 	ignored := make(map[string]bool)
-	err = db.View(func(tx *bbolt.Tx) error {
-		ignoredBucket := tx.Bucket([]byte(BucketIgnored))
-		if ignoredBucket == nil {
-			return nil
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
 		}
-		projIgnored := ignoredBucket.Bucket([]byte(tagName))
-		if projIgnored == nil {
-			return nil
-		}
-		return projIgnored.ForEach(func(k, v []byte) error {
-			ignored[string(k)] = true
-			return nil
-		})
-	})
-	return ignored, err
+		ignored[path] = true
+	}
+	return ignored, rows.Err()
 }
 
 // UnignorePaths remove alvos pré-processados da denylist.
@@ -86,21 +93,23 @@ func UnignorePaths(tagName string, targets []string) error {
 	}
 	defer db.Close()
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		ignoredBucket := tx.Bucket([]byte(BucketIgnored))
-		if ignoredBucket == nil {
-			return nil
-		}
-		projIgnored := ignoredBucket.Bucket([]byte(tagName))
-		if projIgnored == nil {
-			return nil
-		}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-		for _, path := range targets {
-			if err := projIgnored.Delete([]byte(path)); err != nil {
-				return err
-			}
+	stmt, err := tx.Prepare("DELETE FROM files_ignored WHERE tag_name = ? AND path = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, path := range targets {
+		if _, err := stmt.Exec(tagName, path); err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+
+	return tx.Commit()
 }

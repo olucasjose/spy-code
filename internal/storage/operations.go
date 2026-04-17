@@ -5,10 +5,9 @@ package storage
 
 import (
 	"fmt"
-	"go.etcd.io/bbolt"
 )
 
-// GetTagRawKeys retorna as chaves do banco exatamente como estão gravadas (sem resolução de caminhos).
+// GetTagRawKeys retorna as chaves do banco exatamente como estão gravadas.
 func GetTagRawKeys(tagName string) (files []string, ignored []string, err error) {
 	db, err := Open()
 	if err != nil {
@@ -16,26 +15,29 @@ func GetTagRawKeys(tagName string) (files []string, ignored []string, err error)
 	}
 	defer db.Close()
 
-	err = db.View(func(tx *bbolt.Tx) error {
-		if b := tx.Bucket([]byte(BucketFiles)); b != nil {
-			if pb := b.Bucket([]byte(tagName)); pb != nil {
-				_ = pb.ForEach(func(k, v []byte) error {
-					files = append(files, string(k))
-					return nil
-				})
+	fRows, err := db.Query("SELECT path FROM files_tracked WHERE tag_name = ?", tagName)
+	if err == nil {
+		for fRows.Next() {
+			var p string
+			if fRows.Scan(&p) == nil {
+				files = append(files, p)
 			}
 		}
-		if b := tx.Bucket([]byte(BucketIgnored)); b != nil {
-			if pb := b.Bucket([]byte(tagName)); pb != nil {
-				_ = pb.ForEach(func(k, v []byte) error {
-					ignored = append(ignored, string(k))
-					return nil
-				})
+		fRows.Close()
+	}
+
+	iRows, err := db.Query("SELECT path FROM files_ignored WHERE tag_name = ?", tagName)
+	if err == nil {
+		for iRows.Next() {
+			var p string
+			if iRows.Scan(&p) == nil {
+				ignored = append(ignored, p)
 			}
 		}
-		return nil
-	})
-	return files, ignored, err
+		iRows.Close()
+	}
+
+	return files, ignored, nil
 }
 
 // RemoveKeysFromTag deleta chaves específicas dos buckets de uma tag (usado pelo prune).
@@ -46,36 +48,31 @@ func RemoveKeysFromTag(tagName string, filesToRemove, ignoredToRemove []string) 
 	}
 	defer db.Close()
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		remove := func(bucketName string, keys []string) error {
-			if len(keys) == 0 {
-				return nil
-			}
-			b := tx.Bucket([]byte(bucketName))
-			if b == nil {
-				return nil
-			}
-			pb := b.Bucket([]byte(tagName))
-			if pb == nil {
-				return nil
-			}
-			for _, k := range keys {
-				if err := pb.Delete([]byte(k)); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-		if err := remove(BucketFiles, filesToRemove); err != nil {
-			return err
+	if len(filesToRemove) > 0 {
+		stmt, _ := tx.Prepare("DELETE FROM files_tracked WHERE tag_name = ? AND path = ?")
+		for _, f := range filesToRemove {
+			stmt.Exec(tagName, f)
 		}
-		return remove(BucketIgnored, ignoredToRemove)
-	})
+		stmt.Close()
+	}
+	if len(ignoredToRemove) > 0 {
+		stmt, _ := tx.Prepare("DELETE FROM files_ignored WHERE tag_name = ? AND path = ?")
+		for _, i := range ignoredToRemove {
+			stmt.Exec(tagName, i)
+		}
+		stmt.Close()
+	}
+
+	return tx.Commit()
 }
 
 // UpdateTagScope reescreve os caminhos de uma tag resolvendo a troca de contexto (Local <-> Git).
-// swapFiles e swapIgnored são mapas onde a chave é o path antigo e o valor é o novo path calculado pelo CLI.
 func UpdateTagScope(tagName string, meta TagMeta, swapFiles, swapIgnored map[string]string) error {
 	db, err := Open()
 	if err != nil {
@@ -83,41 +80,44 @@ func UpdateTagScope(tagName string, meta TagMeta, swapFiles, swapIgnored map[str
 	}
 	defer db.Close()
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		tagsBucket := tx.Bucket([]byte(BucketTags))
-		if tagsBucket.Get([]byte(tagName)) == nil {
-			return fmt.Errorf("a tag '%s' não existe", tagName)
-		}
-		if err := tagsBucket.Put([]byte(tagName), EncodeTagMeta(meta)); err != nil {
-			return err
-		}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-		updateBucket := func(bucketName string, swaps map[string]string) error {
-			if len(swaps) == 0 {
-				return nil
-			}
-			b := tx.Bucket([]byte(bucketName))
-			if b == nil {
-				return nil
-			}
-			pb := b.Bucket([]byte(tagName))
-			if pb == nil {
-				return nil
-			}
-			for oldKey, newKey := range swaps {
-				if err := pb.Delete([]byte(oldKey)); err != nil {
-					return err
-				}
-				if err := pb.Put([]byte(newKey), []byte("1")); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
+	res, err := tx.Exec("UPDATE tags SET type = ?, repo_id = ?, repo_name = ?, git_root = ? WHERE name = ?",
+		meta.Type, meta.RepoID, meta.RepoName, meta.GitRoot, tagName)
+	if err != nil {
+		return err
+	}
 
-		if err := updateBucket(BucketFiles, swapFiles); err != nil {
-			return err
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("a tag '%s' não existe", tagName)
+	}
+
+	if len(swapFiles) > 0 {
+		delStmt, _ := tx.Prepare("DELETE FROM files_tracked WHERE tag_name = ? AND path = ?")
+		insStmt, _ := tx.Prepare("INSERT INTO files_tracked (tag_name, path) VALUES (?, ?)")
+		for oldKey, newKey := range swapFiles {
+			delStmt.Exec(tagName, oldKey)
+			insStmt.Exec(tagName, newKey)
 		}
-		return updateBucket(BucketIgnored, swapIgnored)
-	})
+		delStmt.Close()
+		insStmt.Close()
+	}
+
+	if len(swapIgnored) > 0 {
+		delStmt, _ := tx.Prepare("DELETE FROM files_ignored WHERE tag_name = ? AND path = ?")
+		insStmt, _ := tx.Prepare("INSERT INTO files_ignored (tag_name, path) VALUES (?, ?)")
+		for oldKey, newKey := range swapIgnored {
+			delStmt.Exec(tagName, oldKey)
+			insStmt.Exec(tagName, newKey)
+		}
+		delStmt.Close()
+		insStmt.Close()
+	}
+
+	return tx.Commit()
 }
