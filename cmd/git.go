@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -19,12 +18,11 @@ var gitCmd = &cobra.Command{
 	Use:   "git",
 	Short: "Agrupa comandos relacionados a operações do repositório Git",
 	Long:  "Comandos utilitários para integração com o Git, permitindo listar, exportar e gerar diffs empacotados.",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if !isInsideGitRepo() {
-			fmt.Fprintln(os.Stderr, "⚠️ Alerta: O diretório atual não pertence a um repositório Git.")
-			fmt.Fprintln(os.Stderr, "Navegue até a raiz ou subdiretório de um repositório válido antes de usar os comandos 'tae git'.")
-			os.Exit(1)
+			return fmt.Errorf("o diretório atual não pertence a um repositório Git. Navegue até a raiz ou subdiretório de um repositório válido antes de usar os comandos 'tae git'")
 		}
+		return nil
 	},
 }
 
@@ -42,7 +40,6 @@ func isInsideGitRepo() bool {
 }
 
 // streamGitBlob lê os bytes diretamente dos objetos internos do Git (isolado do disco rígido)
-// e os jorra no io.Writer de destino (que pode ser um buffer de Zip ou um arquivo local vazio)
 func streamGitBlob(commit, path string, dest io.Writer) error {
 	gitPath := filepath.ToSlash(path) // Garante o padrão UNIX exigido pelo Git
 	
@@ -67,12 +64,11 @@ func getGitRepoName() string {
 	return filepath.Base(strings.TrimSpace(string(out)))
 }
 
-// getGitRepoID extrai o hash do commit raiz (imutável). Ele é nossa chave primária no banco.
+// getGitRepoID extrai o hash do commit raiz (imutável).
 func getGitRepoID() string {
 	cmd := exec.Command("git", "rev-list", "--max-parents=0", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
-		// Fallback para o nome da pasta caso o repo seja recém-criado (sem commits)
 		return getGitRepoName()
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
@@ -82,18 +78,13 @@ func getGitRepoID() string {
 	return getGitRepoName()
 }
 
-// getGitRelativePath normaliza qualquer alvo do usuário (caminhos absolutos ou relativos)
-// transformando-os em caminhos relativos à raiz do repositório, com barras '/'
+// getGitRelativePath normaliza qualquer alvo do usuário
 func getGitRelativePath(target string) (string, error) {
 	absTarget, err := filepath.Abs(target)
-	if err != nil {
-		return "", err
-	}
+	if err != nil { return "", err }
 	
 	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return "", fmt.Errorf("falha ao localizar raiz do git: %v", err)
-	}
+	if err != nil { return "", fmt.Errorf("falha ao localizar raiz do git: %v", err) }
 	gitRoot := strings.TrimSpace(string(out))
 	
 	if !strings.HasPrefix(absTarget, gitRoot) {
@@ -106,11 +97,8 @@ func getGitRelativePath(target string) (string, error) {
 	return filepath.ToSlash(relPath), nil
 }
 
-// isGitPathIgnored verifica se o alvo exato ou algum de seus diretórios pais está na denylist.
 func isGitPathIgnored(target string, ignoredMap map[string]bool) bool {
-	if ignoredMap[target] {
-		return true
-	}
+	if ignoredMap[target] { return true }
 	parts := strings.Split(target, "/")
 	current := ""
 	for i := 0; i < len(parts)-1; i++ {
@@ -119,18 +107,13 @@ func isGitPathIgnored(target string, ignoredMap map[string]bool) bool {
 		} else {
 			current = current + "/" + parts[i]
 		}
-		if ignoredMap[current] {
-			return true
-		}
+		if ignoredMap[current] { return true }
 	}
 	return false
 }
 
-// getGitRoot retorna o caminho absoluto da raiz do repositório Git atual
 func getGitRoot() string {
 	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return ""
-	}
+	if err != nil { return "" }
 	return filepath.ToSlash(strings.TrimSpace(string(out)))
 }

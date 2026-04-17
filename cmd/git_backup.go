@@ -26,7 +26,7 @@ var gitBackupSaveCmd = &cobra.Command{
 	Use:   "backup-save [diretorio_destino]",
 	Short: "Exporta as tags e denylists do repositório Git para um arquivo JSON",
 	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		destDir := "."
 		if len(args) == 1 {
 			destDir = args[0]
@@ -34,8 +34,7 @@ var gitBackupSaveCmd = &cobra.Command{
 
 		info, err := os.Stat(destDir)
 		if err != nil || !info.IsDir() {
-			fmt.Fprintf(os.Stderr, "Erro: O destino '%s' não é um diretório válido ou não existe.\n", destDir)
-			os.Exit(1)
+			return fmt.Errorf("o destino '%s' não é um diretório válido ou não existe", destDir)
 		}
 
 		repoID := getGitRepoID()
@@ -44,7 +43,7 @@ var gitBackupSaveCmd = &cobra.Command{
 		filename := fmt.Sprintf("%s_%s_tae-backup.json", repoName, timestamp)
 		destFile := filepath.Join(destDir, filename)
 
-		executeExport(repoID, repoName, destFile)
+		return executeExport(repoID, repoName, destFile)
 	},
 }
 
@@ -52,24 +51,22 @@ var gitBackupRestoreCmd = &cobra.Command{
 	Use:   "backup-restore <arquivo_backup.json>",
 	Short: "Importa tags e denylists de um arquivo de backup para o repositório Git atual",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		srcFile := args[0]
 		repoID := getGitRepoID()
 		
-		executeImport(repoID, srcFile)
+		return executeImport(repoID, srcFile)
 	},
 }
 
-func executeExport(repoID, repoName, destFile string) {
+func executeExport(repoID, repoName, destFile string) error {
 	if !backupAll && !backupDeny && !backupTags && len(backupOnly) == 0 {
-		fmt.Fprintln(os.Stderr, "Erro: Para exportar, defina o escopo usando --all, --denylist, --tag ou --only.")
-		os.Exit(1)
+		return fmt.Errorf("para exportar, defina o escopo usando --all, --denylist, --tag ou --only")
 	}
 
 	fullDump, err := storage.DumpGitRepositoryData(repoID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Erro ao consultar base de dados: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("erro ao consultar base de dados: %w", err)
 	}
 
 	if fullDump.RepoName == "" {
@@ -97,29 +94,26 @@ func executeExport(repoID, repoName, destFile string) {
 
 	data, err := json.MarshalIndent(filteredDump, "", "  ")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Erro estrutural ao serializar backup: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("erro estrutural ao serializar backup: %w", err)
 	}
 
 	if err := os.WriteFile(destFile, data, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "Erro de I/O ao salvar exportação: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("erro de I/O ao salvar exportação: %w", err)
 	}
 
 	fmt.Printf("Sucesso: Backup do Git exportado para '%s' (Denylist: %d, Tags: %d).\n", destFile, len(filteredDump.RepoDenylist), len(filteredDump.Tags))
+	return nil
 }
 
-func executeImport(currentRepoID, srcFile string) {
+func executeImport(currentRepoID, srcFile string) error {
 	data, err := os.ReadFile(srcFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Erro de I/O ao ler o arquivo de backup: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("erro de I/O ao ler o arquivo de backup: %w", err)
 	}
 
 	var backup storage.BackupSchema
 	if err := json.Unmarshal(data, &backup); err != nil {
-		fmt.Fprintf(os.Stderr, "Falha no parse. Formato JSON inválido: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("falha no parse. Formato JSON inválido: %w", err)
 	}
 
 	if backup.RepoID != currentRepoID {
@@ -127,17 +121,16 @@ func executeImport(currentRepoID, srcFile string) {
 		if origem == "" {
 			origem = backup.RepoID
 		}
-		fmt.Fprintf(os.Stderr, "Erro Fatal: O arquivo de backup pertence ao repositório [%s], mas você está tentando importá-lo no repositório atual. Operação bloqueada para evitar corrupção de rastreamento.\n", origem)
-		os.Exit(1)
+		return fmt.Errorf("o arquivo de backup pertence ao repositório [%s], mas você está tentando importá-lo no repositório atual", origem)
 	}
 
 	currentGitRoot := getGitRoot()
 	if err := storage.RestoreGitRepositoryData(currentGitRoot, backup); err != nil {
-		fmt.Fprintf(os.Stderr, "Erro fatal durante a restauração: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("erro fatal durante a restauração: %w", err)
 	}
 
 	fmt.Printf("Sucesso: Backup importado com segurança (Denylist: %d, Tags: %d).\n", len(backup.RepoDenylist), len(backup.Tags))
+	return nil
 }
 
 func containsString(list []string, target string) bool {

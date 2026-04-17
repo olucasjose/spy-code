@@ -42,29 +42,26 @@ var exportCmd = &cobra.Command{
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		tagName := args[0]
 		destPath := args[1]
 
 		rawFiles, err := storage.GetFilesByTag(tagName)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao buscar rastreamento da tag: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("erro ao buscar rastreamento da tag: %w", err)
 		}
 		if len(rawFiles) == 0 {
-			fmt.Printf("A tag '%s' não possui alvos rastreados ou não existe.\n", tagName)
-			os.Exit(1)
+			return fmt.Errorf("a tag '%s' não possui alvos rastreados ou não existe", tagName)
 		}
 
 		resolvedFiles, err := restorePathsForDisk(tagName, rawFiles)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro de escopo estrutural: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("erro de escopo estrutural: %w", err)
 		}
 
 		ignoredMap, err := storage.GetIgnoredPaths(tagName)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar Exclusion Index: %v\n", err)
+			fmt.Printf("Aviso: Falha ao carregar Exclusion Index: %v\n", err)
 		}
 
 		restoredIgnored := make(map[string]bool)
@@ -80,13 +77,11 @@ var exportCmd = &cobra.Command{
 
 		files := expandPathsToFiles(resolvedFiles, restoredIgnored)
 		if len(files) == 0 {
-			fmt.Println("Erro: Nenhum arquivo válido encontrado (possivelmente todos foram ignorados).")
-			os.Exit(1)
+			return fmt.Errorf("nenhum arquivo válido encontrado (possivelmente todos foram ignorados)")
 		}
 
 		if err := os.MkdirAll(destPath, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao criar destino: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("erro ao criar destino: %w", err)
 		}
 
 		basePrefix := render.GetCommonPrefix(files)
@@ -140,9 +135,11 @@ var exportCmd = &cobra.Command{
 
 			fmt.Printf("\nSucesso! Arquivos exportados para a pasta '%s'.\n", destPath)
 		}
+		return nil
 	},
 }
 
+// Nota da Gina: Funções auxiliares mantidas intactas, ajuste apenas o os.Stderr interno para print para evitar side-effects
 func init() {
 	exportCmd.Flags().BoolVarP(&exportZip, "zip", "z", false, "Exporta e compacta os arquivos em formato .zip")
 	exportCmd.Flags().IntVarP(&exportLimit, "limit", "l", 0, "Teto máximo de arquivos por zip (requer -z)")
@@ -157,15 +154,9 @@ func expandPathsToFiles(paths []string, ignored map[string]bool) []string {
 	var expanded []string
 
 	for _, p := range paths {
-		if ignored[p] {
-			continue
-		}
-
+		if ignored[p] { continue }
 		info, err := os.Stat(p)
-		if err != nil {
-			continue
-		}
-
+		if err != nil { continue }
 		if !info.IsDir() {
 			if !uniqueFiles[p] {
 				uniqueFiles[p] = true
@@ -173,19 +164,12 @@ func expandPathsToFiles(paths []string, ignored map[string]bool) []string {
 			}
 			continue
 		}
-
 		filepath.Walk(p, func(path string, f os.FileInfo, err error) error {
-			if err != nil {
-				return nil
-			}
-
+			if err != nil { return nil }
 			if ignored[path] {
-				if f.IsDir() {
-					return filepath.SkipDir
-				}
+				if f.IsDir() { return filepath.SkipDir }
 				return nil
 			}
-
 			if !f.IsDir() {
 				if !uniqueFiles[path] {
 					uniqueFiles[path] = true
@@ -206,7 +190,7 @@ func zipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, 
 
 		mu.Lock()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao criar %s: %v\n", chunk.ZipName, err)
+			fmt.Printf("Erro ao criar %s: %v\n", chunk.ZipName, err)
 		} else {
 			fmt.Printf("  -> %s gerado (%d arquivos reais)\n", chunk.ZipName, len(chunk.Files))
 			if !exportQuiet {
@@ -217,9 +201,7 @@ func zipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, 
 					} else {
 						relPath = strings.TrimPrefix(path, basePrefix)
 						relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
-						if relPath == "" {
-							relPath = filepath.Base(path)
-						}
+						if relPath == "" { relPath = filepath.Base(path) }
 						relPath = filepath.ToSlash(relPath)
 					}
 					fmt.Printf("      - %s\n", relPath)
@@ -232,9 +214,7 @@ func zipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, 
 
 func createZipChunk(zipPath string, files []string, basePrefix string, flattenMap map[string]string) error {
 	zipFile, err := os.Create(zipPath)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	defer zipFile.Close()
 
 	archive := zip.NewWriter(zipFile)
@@ -242,9 +222,7 @@ func createZipChunk(zipPath string, files []string, basePrefix string, flattenMa
 
 	for _, path := range files {
 		info, err := os.Stat(path)
-		if err != nil || info.IsDir() {
-			continue
-		}
+		if err != nil || info.IsDir() { continue }
 
 		var relPath string
 		if flattenMap != nil && flattenMap[path] != "" {
@@ -252,34 +230,24 @@ func createZipChunk(zipPath string, files []string, basePrefix string, flattenMa
 		} else {
 			relPath = strings.TrimPrefix(path, basePrefix)
 			relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
-			if relPath == "" {
-				relPath = filepath.Base(path)
-			}
+			if relPath == "" { relPath = filepath.Base(path) }
 			relPath = filepath.ToSlash(relPath)
 		}
 
 		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
+		if err != nil { return err }
 		header.Name = relPath
 		header.Method = zip.Deflate
 
 		writer, err := archive.CreateHeader(header)
-		if err != nil {
-			return err
-		}
+		if err != nil { return err }
 
 		fileToZip, err := os.Open(path)
-		if err != nil {
-			return err
-		}
+		if err != nil { return err }
 
 		_, err = io.Copy(writer, fileToZip)
 		fileToZip.Close()
-		if err != nil {
-			return err
-		}
+		if err != nil { return err }
 	}
 	return nil
 }
@@ -293,9 +261,7 @@ func flatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string,
 		} else {
 			relPath = strings.TrimPrefix(path, basePrefix)
 			relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
-			if relPath == "" {
-				relPath = filepath.Base(path)
-			}
+			if relPath == "" { relPath = filepath.Base(path) }
 		}
 
 		targetPath := filepath.Join(dest, relPath)
@@ -303,7 +269,7 @@ func flatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string,
 
 		mu.Lock()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao exportar %s: %v\n", path, err)
+			fmt.Printf("Erro ao exportar %s: %v\n", path, err)
 		} else if !exportQuiet {
 			fmt.Printf("  -> %s\n", targetPath)
 		}
@@ -313,19 +279,13 @@ func flatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string,
 
 func copySingleFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	defer sourceFile.Close()
 
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return err
-	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil { return err }
 
 	destFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	defer destFile.Close()
 
 	_, err = io.Copy(destFile, sourceFile)

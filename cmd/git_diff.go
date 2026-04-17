@@ -32,14 +32,18 @@ var gitDiffCmd = &cobra.Command{
 	Use:   "diff <commit1> <commit2>",
 	Short: "Compacta arquivos alterados entre dois commits isolado da working tree",
 	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		commit1, commit2 := args[0], args[1]
 		fmt.Printf("Comparando %s -> %s\n\n", commit1, commit2)
 
-		rawFiles := getChangedFiles(commit1, commit2)
+		rawFiles, err := getChangedFiles(commit1, commit2)
+		if err != nil {
+			return err
+		}
+
 		if len(rawFiles) == 0 {
 			fmt.Println("\nNenhum arquivo modificado encontrado na comparação.")
-			os.Exit(0)
+			return nil
 		}
 
 		// Interceptação e Filtro da Denylist
@@ -48,7 +52,7 @@ var gitDiffCmd = &cobra.Command{
 			repoID := getGitRepoID()
 			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar denylist do repositório: %v\n", err)
+				fmt.Printf("Aviso: Falha ao carregar denylist do repositório: %v\n", err)
 			}
 
 			for _, f := range rawFiles {
@@ -64,7 +68,7 @@ var gitDiffCmd = &cobra.Command{
 
 		if len(files) == 0 {
 			fmt.Println("\nTodos os arquivos alterados foram retidos pela denylist. Nada a compactar.")
-			os.Exit(0)
+			return nil
 		}
 
 		timestamp := time.Now().Format("20060102_150405")
@@ -89,6 +93,7 @@ var gitDiffCmd = &cobra.Command{
 		wg.Wait()
 
 		fmt.Printf("\nSucesso! %d arquivo(s) zip gerado(s) no diretório atual.\n", len(chunks))
+		return nil
 	},
 }
 
@@ -99,15 +104,14 @@ func init() {
 	gitCmd.AddCommand(gitDiffCmd)
 }
 
-func getChangedFiles(c1, c2 string) []string {
+func getChangedFiles(c1, c2 string) ([]string, error) {
 	cmd := exec.Command("git", "diff", "--name-status", c1, c2)
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Erro no git diff:\n%s\n", stderr.String())
-		os.Exit(1)
+		return nil, fmt.Errorf("erro no git diff:\n%s", stderr.String())
 	}
 
 	var filesToZip []string
@@ -138,14 +142,14 @@ func getChangedFiles(c1, c2 string) []string {
 			fmt.Printf("  %c: %s\n", statusChar, filePath)
 		}
 	}
-	return filesToZip
+	return filesToZip, nil
 }
 
 func diffWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, targetCommit string) {
 	defer wg.Done()
 	for chunk := range jobs {
 		if err := buildZipChunk(chunk.ZipName, chunk.Files, basePrefix, targetCommit); err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao criar %s: %v\n", chunk.ZipName, err)
+			fmt.Printf("Erro ao criar %s: %v\n", chunk.ZipName, err)
 		} else {
 			fmt.Printf("  -> %s gerado (%d arquivos)\n", chunk.ZipName, len(chunk.Files))
 		}

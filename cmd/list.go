@@ -39,12 +39,11 @@ var listCmd = &cobra.Command{
 		tags, _ := storage.GetAllTags()
 		return tags, cobra.ShellCompDirectiveNoFileComp
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			tagsMeta, err := storage.GetAllTagsWithMeta()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Erro ao carregar tags: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("erro ao carregar tags: %w", err)
 			}
 
 			if listGroup {
@@ -60,7 +59,7 @@ var listCmd = &cobra.Command{
 					}
 					groups[repo] = append(groups[repo], tag)
 				}
-				
+
 				var repos []string
 				for r := range groups {
 					if r != "No repo" {
@@ -91,7 +90,7 @@ var listCmd = &cobra.Command{
 						fmt.Println()
 					}
 				}
-				return
+				return nil
 			}
 
 			if !listDetails {
@@ -129,7 +128,7 @@ var listCmd = &cobra.Command{
 			if listDetails {
 				w.Flush()
 			}
-			return
+			return nil
 		}
 
 		tagName := args[0]
@@ -137,43 +136,40 @@ var listCmd = &cobra.Command{
 		if listIgnored {
 			ignoredMap, err := storage.GetIgnoredPaths(tagName)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Erro ao ler Exclusion Index: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("erro ao ler Exclusion Index: %w", err)
 			}
 
 			if len(ignoredMap) == 0 {
 				fmt.Printf("A denylist da tag '%s' está vazia.\n", tagName)
-				return
+				return nil
 			}
 
 			fmt.Printf("Exclusion Index (Denylist) da tag '%s':\n", tagName)
 			for path := range ignoredMap {
 				fmt.Printf("  - %s\n", path)
 			}
-			return
+			return nil
 		}
 
 		files, err := storage.GetFilesByTag(tagName)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao consultar arquivos: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("erro ao consultar arquivos: %w", err)
 		}
 
 		if len(files) == 0 {
 			fmt.Printf("Alvos rastreados na tag '%s':\n  (Vazio ou tag não inicializada)\n", tagName)
-			return
+			return nil
 		}
 
 		resolvedFiles, err := restorePathsForDisk(tagName, files)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro de escopo estrutural: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("erro de escopo estrutural: %w", err)
 		}
 		files = resolvedFiles
 
 		if listExpand {
 			ignoredMap, _ := storage.GetIgnoredPaths(tagName)
-			
+
 			restoredIgnored := make(map[string]bool)
 			var igPaths []string
 			for p := range ignoredMap { igPaths = append(igPaths, p) }
@@ -190,7 +186,7 @@ var listCmd = &cobra.Command{
 			for _, f := range files {
 				fmt.Printf("  - %s\n", f)
 			}
-			return
+			return nil
 		}
 
 		basePrefix := render.GetCommonPrefix(files)
@@ -214,6 +210,7 @@ var listCmd = &cobra.Command{
 				fmt.Printf("  - %s\n", relPath)
 			}
 		}
+		return nil
 	},
 }
 

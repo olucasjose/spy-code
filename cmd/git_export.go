@@ -34,7 +34,7 @@ var gitExportCmd = &cobra.Command{
 	Use:   "export <commit> <dest>",
 	Short: "Exporta a árvore de arquivos de um commit isolado da working tree",
 	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		commit := args[0]
 		destPath := args[1]
 
@@ -42,8 +42,7 @@ var gitExportCmd = &cobra.Command{
 		var out bytes.Buffer
 		gitExec.Stdout = &out
 		if err := gitExec.Run(); err != nil {
-			fmt.Fprintln(os.Stderr, "Erro ao ler árvore do Git. Verifique o repositório e o hash.")
-			os.Exit(1)
+			return fmt.Errorf("erro ao ler árvore do Git. Verifique o repositório e o hash")
 		}
 
 		var rawFiles []string
@@ -58,7 +57,7 @@ var gitExportCmd = &cobra.Command{
 			repoID := getGitRepoID()
 			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar denylist do repositório: %v\n", err)
+				fmt.Printf("Aviso: Falha ao carregar denylist do repositório: %v\n", err)
 			}
 			
 			for _, f := range rawFiles {
@@ -71,13 +70,11 @@ var gitExportCmd = &cobra.Command{
 		}
 
 		if len(files) == 0 {
-			fmt.Println("Nenhum arquivo válido encontrado para exportação (ou todos foram retidos pela denylist).")
-			os.Exit(1)
+			return fmt.Errorf("nenhum arquivo válido encontrado para exportação (ou todos foram retidos pela denylist)")
 		}
 
 		if err := os.MkdirAll(destPath, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao criar destino: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("erro ao criar destino: %w", err)
 		}
 
 		basePrefix := render.GetCommonPrefix(files)
@@ -128,6 +125,7 @@ var gitExportCmd = &cobra.Command{
 			wg.Wait()
 			fmt.Printf("\nSucesso! Arquivos exportados para '%s'.\n", destPath)
 		}
+		return nil
 	},
 }
 
@@ -149,7 +147,7 @@ func gitZipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefi
 		
 		mu.Lock()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao criar %s: %v\n", chunk.ZipName, err)
+			fmt.Printf("Erro ao criar %s: %v\n", chunk.ZipName, err)
 		} else {
 			fmt.Printf("  -> %s gerado (%d arquivos)\n", chunk.ZipName, len(chunk.Files))
 			if !gitExportQuiet {
@@ -225,7 +223,7 @@ func gitFlatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest, com
 
 		mu.Lock()
 		if errOut != nil {
-			fmt.Fprintln(os.Stderr, errOut)
+			fmt.Println(errOut)
 		} else if !gitExportQuiet {
 			fmt.Printf("  -> %s\n", targetPath)
 		}

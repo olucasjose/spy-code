@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -28,39 +27,36 @@ var gitListCmd = &cobra.Command{
 	Use:   "list [commit]",
 	Short: "Lista arquivos de um commit ou a denylist do repositório atual",
 	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Interceptação isolada para listar a denylist do repositório
 		if gitListIgnored {
 			repoID := getGitRepoID()
 			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Erro ao ler a denylist do repositório: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("erro ao ler a denylist do repositório: %w", err)
 			}
 
 			if len(ignoredMap) == 0 {
 				fmt.Println("A denylist do repositório atual está vazia.")
-				return
+				return nil
 			}
 
 			fmt.Println("Exclusion Index (Denylist) do repositório atual:")
 			for path := range ignoredMap {
 				fmt.Printf("  - %s\n", path)
 			}
-			return
+			return nil
 		}
 
 		// Validação Fail-Fast: se não for para ver a denylist, um commit é obrigatório
 		if len(args) == 0 {
-			fmt.Fprintln(os.Stderr, "Erro: Informe um <commit> para listar ou use a flag --ignored (-i) para ver a denylist.")
-			os.Exit(1)
+			return fmt.Errorf("informe um <commit> para listar ou use a flag --ignored (-i) para ver a denylist")
 		}
 
 		commit := args[0]
 		out, err := exec.Command("git", "ls-tree", "-r", "--name-only", commit).CombinedOutput()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao consultar Git:\n%s\n", string(out))
-			os.Exit(1)
+			return fmt.Errorf("erro ao consultar Git:\n%s", string(out))
 		}
 
 		var rawFiles []string
@@ -72,7 +68,7 @@ var gitListCmd = &cobra.Command{
 
 		if len(rawFiles) == 0 {
 			fmt.Println("Nenhum arquivo encontrado neste commit.")
-			return
+			return nil
 		}
 
 		// Interceptação e Filtro da Denylist
@@ -81,7 +77,7 @@ var gitListCmd = &cobra.Command{
 			repoID := getGitRepoID()
 			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar denylist do repositório: %v\n", err)
+				fmt.Printf("Aviso: Falha ao carregar denylist do repositório: %v\n", err)
 			}
 
 			for _, f := range rawFiles {
@@ -95,7 +91,7 @@ var gitListCmd = &cobra.Command{
 
 		if len(files) == 0 {
 			fmt.Println("Todos os arquivos deste commit foram retidos pela denylist.")
-			return
+			return nil
 		}
 
 		var ignorePatterns []string
@@ -113,6 +109,7 @@ var gitListCmd = &cobra.Command{
 				}
 			}
 		}
+		return nil
 	},
 }
 

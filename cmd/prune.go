@@ -28,15 +28,13 @@ var pruneCmd = &cobra.Command{
 		tags, _ := storage.GetAllTags()
 		return tags, cobra.ShellCompDirectiveNoFileComp
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 && !pruneAll {
-			fmt.Fprintln(os.Stderr, "Erro: Informe pelo menos uma tag ou use a flag --all (-a) para atuar em todas.")
-			os.Exit(1)
+			return fmt.Errorf("informe pelo menos uma tag ou use a flag --all (-a) para atuar em todas")
 		}
 
 		if pruneQuiet && !pruneForce && !pruneList {
-			fmt.Fprintln(os.Stderr, "Erro: A flag --quiet (-q) exige o uso de --force (-f) para evitar que o terminal aguarde confirmação invisivelmente.")
-			os.Exit(1)
+			return fmt.Errorf("a flag --quiet (-q) exige o uso de --force (-f) para evitar que o terminal aguarde confirmação invisivelmente")
 		}
 
 		var targetTags []string
@@ -90,7 +88,7 @@ var pruneCmd = &cobra.Command{
 			if !pruneQuiet {
 				fmt.Println("Nenhum arquivo fantasma encontrado. Os índices estão atualizados.")
 			}
-			return
+			return nil
 		}
 
 		if !pruneQuiet {
@@ -121,7 +119,7 @@ var pruneCmd = &cobra.Command{
 			if !pruneQuiet {
 				fmt.Printf("\nTotal detectado: %d arquivo(s).\n", totalGhosts)
 			}
-			return
+			return nil
 		}
 
 		if !pruneForce {
@@ -131,21 +129,21 @@ var pruneCmd = &cobra.Command{
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response != "s" && response != "y" {
 				fmt.Println("Operação cancelada.")
-				return
+				return nil
 			}
 		}
 
 		// Etapa 3: Execução Destrutiva
 		for tagName := range ghostsFilesByTag {
 			if err := storage.RemoveKeysFromTag(tagName, ghostsFilesByTag[tagName], ghostsIgnoredByTag[tagName]); err != nil {
-				fmt.Fprintf(os.Stderr, "Erro ao limpar tag '%s': %v\n", tagName, err)
+				fmt.Printf("Erro ao limpar tag '%s': %v\n", tagName, err) // Aviso contínuo para não travar o loop
 			}
 		}
-		
+
 		for tagName := range ghostsIgnoredByTag {
 			if _, exists := ghostsFilesByTag[tagName]; !exists {
 				if err := storage.RemoveKeysFromTag(tagName, nil, ghostsIgnoredByTag[tagName]); err != nil {
-					fmt.Fprintf(os.Stderr, "Erro ao limpar tag '%s': %v\n", tagName, err)
+					fmt.Printf("Erro ao limpar tag '%s': %v\n", tagName, err)
 				}
 			}
 		}
@@ -153,6 +151,7 @@ var pruneCmd = &cobra.Command{
 		if !pruneQuiet {
 			fmt.Printf("Sucesso! %d arquivo(s) fantasma(s) removido(s) do banco.\n", totalGhosts)
 		}
+		return nil
 	},
 }
 
