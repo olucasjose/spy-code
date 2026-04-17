@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -25,6 +26,7 @@ var (
 	listExpand   bool
 	listIgnored  bool
 	listDetails  bool
+	listGroup    bool
 )
 
 var listCmd = &cobra.Command{
@@ -46,7 +48,71 @@ var listCmd = &cobra.Command{
 				fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
 				os.Exit(1)
 			}
-			
+
+			// Lógica de agrupamento por repositório
+			if listGroup {
+				groups := make(map[string][]string)
+
+				db.View(func(tx *bbolt.Tx) error {
+					b := tx.Bucket([]byte(storage.BucketTags))
+					if b == nil {
+						return nil
+					}
+					return b.ForEach(func(k, v []byte) error {
+						meta := storage.ParseTagMeta(v)
+						tag := string(k)
+						repo := "No repo"
+						
+						if meta.Type == storage.TagTypeGit {
+							repo = meta.RepoName
+							if repo == "" {
+								repo = meta.RepoID // Fallback
+							}
+						}
+						
+						groups[repo] = append(groups[repo], tag)
+						return nil
+					})
+				})
+				
+				db.Close()
+
+				var repos []string
+				for r := range groups {
+					if r != "No repo" {
+						repos = append(repos, r)
+					}
+				}
+				sort.Strings(repos)
+
+				// Imprime "No repo" primeiro
+				if tags, ok := groups["No repo"]; ok {
+					fmt.Println("No repo:")
+					sort.Strings(tags)
+					for _, t := range tags {
+						fmt.Printf("\t%s\n", t)
+					}
+					if len(repos) > 0 {
+						fmt.Println()
+					}
+				}
+
+				// Imprime os repositórios Git com nome em amarelo
+				for i, r := range repos {
+					// \033[33m é o código ANSI para amarelo e \033[0m reseta a formatação
+					fmt.Printf("\033[33m%s:\033[0m\n", r)
+					tags := groups[r]
+					sort.Strings(tags)
+					for _, t := range tags {
+						fmt.Printf("\t%s\n", t)
+					}
+					if i < len(repos)-1 {
+						fmt.Println()
+					}
+				}
+				return
+			}
+
 			if !listDetails {
 				fmt.Println("Tags cadastradas:")
 			}
@@ -212,5 +278,6 @@ func init() {
 	listCmd.Flags().BoolVarP(&listExpand, "expand", "e", false, "Expande diretórios lendo o disco físico antes de listar")
 	listCmd.Flags().BoolVarP(&listIgnored, "ignored", "i", false, "Exibe apenas os arquivos na denylist permanente da tag")
 	listCmd.Flags().BoolVarP(&listDetails, "details", "d", false, "Exibe os metadados das tags em colunas, indicando se são Local ou Git")
+	listCmd.Flags().BoolVarP(&listGroup, "group", "g", false, "Agrupa a exibição de tags por repositório (com suporte a cores)")
 	rootCmd.AddCommand(listCmd)
 }
