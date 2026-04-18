@@ -8,10 +8,11 @@ import (
 	"runtime"
 	"time"
 
+	"tae/internal/exporter"
+	"tae/internal/filter"
 	"tae/internal/grouper"
 	"tae/internal/render"
 	"tae/internal/storage"
-	"tae/internal/exporter"
 	"tae/internal/vcs"
 
 	"github.com/spf13/cobra"
@@ -60,7 +61,7 @@ var gitDiffCmd = &cobra.Command{
 			}
 
 			for _, f := range rawFiles {
-				if !isGitPathIgnored(f, ignoredMap) {
+				if !filter.IsPathIgnoredByMap(f, ignoredMap) {
 					files = append(files, f)
 				} else {
 					fmt.Printf("  I: %s (ignorado via denylist)\n", f)
@@ -84,14 +85,14 @@ var gitDiffCmd = &cobra.Command{
 		fmt.Printf("\nIniciando empacotamento de %d arquivo(s) em %d lote(s)...\n", len(files), len(chunks))
 
 		numWorkers := runtime.NumCPU()
-		
+
 		opts := exporter.ExportOptions{
 			DestDir:    ".", // diff sempre exporta no diretório atual
 			BasePrefix: basePrefix,
 			GitCommit:  commit2,
 		}
 		exporter.ExportZip(chunks, numWorkers, opts)
-		
+
 		fmt.Printf("\nSucesso! %d arquivo(s) zip gerado(s) no diretório atual.\n", len(chunks))
 		return nil
 	},

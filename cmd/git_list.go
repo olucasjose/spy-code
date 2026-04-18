@@ -5,9 +5,9 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
+	"tae/internal/filter"
 	"tae/internal/render"
 	"tae/internal/storage"
 	"tae/internal/vcs"
@@ -71,7 +71,7 @@ var gitListCmd = &cobra.Command{
 			}
 
 			for _, f := range rawFiles {
-				if !isGitPathIgnored(f, ignoredMap) {
+				if !filter.IsPathIgnoredByMap(f, ignoredMap) {
 					files = append(files, f)
 				}
 			}
@@ -94,23 +94,13 @@ var gitListCmd = &cobra.Command{
 			render.PrintTree(rootNode, "", 0, gitListDepth, ignorePatterns)
 		} else {
 			for _, f := range files {
-				if !renderIsIgnored(f, ignorePatterns) {
+				if !filter.MatchPattern(f, ignorePatterns) {
 					fmt.Printf("  - %s\n", f)
 				}
 			}
 		}
 		return nil
 	},
-}
-
-func renderIsIgnored(path string, patterns []string) bool {
-	for _, p := range patterns {
-		p = strings.TrimSpace(p)
-		if matched, _ := filepath.Match(p, path); matched {
-			return true
-		}
-	}
-	return false
 }
 
 func init() {

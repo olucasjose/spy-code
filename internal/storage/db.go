@@ -36,7 +36,7 @@ func Open() (*sql.DB, error) {
 
 	// _pragma=foreign_keys(1) garante que o SQLite respeite CASCADE e restrições
 	dsn := fmt.Sprintf("%s?_pragma=foreign_keys(1)", dbPath)
-	
+
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao abrir arquivo sqlite: %w", err)

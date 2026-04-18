@@ -6,11 +6,11 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
-	"tae/internal/storage"
+	"tae/internal/filter"
 	"tae/internal/fs"
+	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
 )
@@ -36,7 +36,7 @@ var trackCmd = &cobra.Command{
 
 		var validTargets []string
 		for _, target := range rawTargets {
-			if shouldIgnore(target, ignorePatterns) {
+			if filter.MatchPattern(target, ignorePatterns) {
 				fmt.Printf("Ignorando alvo via filtro regex: %s\n", target)
 				continue
 			}
@@ -66,22 +66,6 @@ var trackCmd = &cobra.Command{
 		fmt.Printf("%d alvo(s) rastreado(s) com sucesso na tag '%s'.\n", len(validTargets), tagName)
 		return nil
 	},
-}
-
-// shouldIgnore avalia se o target bate com algum padrão.
-func shouldIgnore(target string, patterns []string) bool {
-	if len(patterns) == 0 {
-		return false
-	}
-
-	for _, p := range patterns {
-		p = strings.TrimSpace(p)
-		matched, err := filepath.Match(p, target)
-		if err == nil && matched {
-			return true
-		}
-	}
-	return false
 }
 
 func init() {

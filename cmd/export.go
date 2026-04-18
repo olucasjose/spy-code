@@ -6,14 +6,13 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 
+	"tae/internal/exporter"
+	"tae/internal/fs"
 	"tae/internal/grouper"
 	"tae/internal/render"
 	"tae/internal/storage"
-	"tae/internal/exporter"
-	"tae/internal/fs"
 
 	"github.com/spf13/cobra"
 )

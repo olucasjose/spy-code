@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"tae/internal/vcs"
 
@@ -26,24 +25,4 @@ var gitCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(gitCmd)
-}
-
-// isGitPathIgnored ficará aqui provisoriamente até a Fase 4 (Filtros)
-func isGitPathIgnored(target string, ignoredMap map[string]bool) bool {
-	if ignoredMap[target] {
-		return true
-	}
-	parts := strings.Split(target, "/")
-	current := ""
-	for i := 0; i < len(parts)-1; i++ {
-		if current == "" {
-			current = parts[i]
-		} else {
-			current = current + "/" + parts[i]
-		}
-		if ignoredMap[current] {
-			return true
-		}
-	}
-	return false
 }

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"tae/internal/filter"
 )
 
 // GetCommonPrefix centraliza a descoberta de raiz comum.
@@ -46,7 +48,7 @@ type TreeNode struct {
 // BuildVisualTree mapeia a lista plana em uma hierarquia visual.
 func BuildVisualTree(files []string, basePrefix string) *TreeNode {
 	root := &TreeNode{Name: basePrefix, IsDir: true, Children: make(map[string]*TreeNode)}
-	
+
 	for _, f := range files {
 		relPath := strings.TrimPrefix(f, basePrefix)
 		relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
@@ -72,17 +74,6 @@ func BuildVisualTree(files []string, basePrefix string) *TreeNode {
 	return root
 }
 
-func shouldIgnore(name string, ignorePatterns []string) bool {
-	for _, p := range ignorePatterns {
-		p = strings.TrimSpace(p)
-		matched, err := filepath.Match(p, name)
-		if err == nil && matched {
-			return true
-		}
-	}
-	return false
-}
-
 // PrintTree imprime a árvore com as ramificações de terminal.
 func PrintTree(node *TreeNode, prefix string, depth, maxDepth int, ignorePatterns []string) {
 	if maxDepth > 0 && depth > maxDepth {
@@ -91,7 +82,7 @@ func PrintTree(node *TreeNode, prefix string, depth, maxDepth int, ignorePattern
 
 	var keys []string
 	for k, child := range node.Children {
-		if !shouldIgnore(child.Name, ignorePatterns) {
+		if !filter.MatchPattern(child.Name, ignorePatterns) {
 			keys = append(keys, k)
 		}
 	}

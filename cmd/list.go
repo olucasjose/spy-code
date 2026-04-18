@@ -11,9 +11,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"tae/internal/fs"
 	"tae/internal/render"
 	"tae/internal/storage"
-	"tae/internal/fs"
 
 	"github.com/spf13/cobra"
 )
@@ -173,9 +173,13 @@ var listCmd = &cobra.Command{
 
 			restoredIgnored := make(map[string]bool)
 			var igPaths []string
-			for p := range ignoredMap { igPaths = append(igPaths, p) }
+			for p := range ignoredMap {
+				igPaths = append(igPaths, p)
+			}
 			if resIgPaths, err := fs.RestorePathsForDisk(tagName, igPaths); err == nil {
-				for _, p := range resIgPaths { restoredIgnored[p] = true }
+				for _, p := range resIgPaths {
+					restoredIgnored[p] = true
+				}
 			}
 
 			files = fs.ExpandPathsToFiles(files, restoredIgnored)

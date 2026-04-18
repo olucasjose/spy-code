@@ -4,8 +4,8 @@
 package cmd
 
 import (
-	"tae/internal/vcs"
 	"fmt"
+	"tae/internal/vcs"
 
 	"tae/internal/storage"
 

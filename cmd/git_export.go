@@ -4,18 +4,19 @@
 package cmd
 
 import (
-	"tae/internal/vcs"
 	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+	"tae/internal/vcs"
 
+	"tae/internal/exporter"
+	"tae/internal/filter"
 	"tae/internal/grouper"
 	"tae/internal/render"
 	"tae/internal/storage"
-	"tae/internal/exporter"
 
 	"github.com/spf13/cobra"
 )
@@ -58,9 +59,9 @@ var gitExportCmd = &cobra.Command{
 			if err != nil {
 				fmt.Printf("Aviso: Falha ao carregar denylist do repositório: %v\n", err)
 			}
-			
+
 			for _, f := range rawFiles {
-				if !isGitPathIgnored(f, ignoredMap) {
+				if !filter.IsPathIgnoredByMap(f, ignoredMap) {
 					files = append(files, f)
 				}
 			}
@@ -96,7 +97,7 @@ var gitExportCmd = &cobra.Command{
 			repoName := vcs.GetRepoName()
 			baseName := fmt.Sprintf("%s-%s", repoName, commit)
 			chunks := grouper.GroupFiles(files, gitExportLimit, baseName, gitExportMerge)
-			
+
 			fmt.Printf("Iniciando exportação em ZIP do commit %s. %d arquivo(s) em %d lote(s)...\n", commit, len(files), len(chunks))
 			if !gitExportQuiet {
 				fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)

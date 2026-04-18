@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-    "tae/internal/render"
+	"tae/internal/render"
 )
 
 type Node struct {
@@ -55,7 +55,7 @@ func GroupFiles(files []string, limit int, baseName string, merge bool) []Export
 	var allocate func(node *Node, prefix string, activeChunk *Chunk) *Chunk
 	allocate = func(node *Node, prefix string, activeChunk *Chunk) *Chunk {
 		sort.Strings(node.Files)
-		
+
 		for _, f := range node.Files {
 			if len(activeChunk.Files) >= limit {
 				chunks = append(chunks, activeChunk)
@@ -72,7 +72,7 @@ func GroupFiles(files []string, limit int, baseName string, merge bool) []Export
 
 		for _, dName := range dirNames {
 			subNode := node.SubDirs[dName]
-			
+
 			nodePrefix := prefix
 			if nodePrefix == baseName {
 				nodePrefix = fmt.Sprintf("%s_%s", baseName, dName)
@@ -83,7 +83,7 @@ func GroupFiles(files []string, limit int, baseName string, merge bool) []Export
 			} else {
 				childChunk := &Chunk{Prefix: nodePrefix}
 				finalChildChunk := allocate(subNode, nodePrefix, childChunk)
-				
+
 				if len(finalChildChunk.Files) > 0 {
 					chunks = append(chunks, finalChildChunk)
 				}
@@ -128,16 +128,16 @@ func mergeBlocks(chunks []ExportChunk, limit int, baseName string) []ExportChunk
 			if len(bins[i].Files)+len(chunk.Files) <= limit {
 				// Encaixa no lote (bin) existente
 				bins[i].Files = append(bins[i].Files, chunk.Files...)
-				
+
 				cName := stripZip(bins[i].ZipName)
 				nName := stripZip(chunk.ZipName)
-				
+
 				cleanNext := strings.TrimPrefix(nName, baseName+"_")
 				if cleanNext == baseName {
 					cleanNext = "root"
 				}
 				bins[i].ZipName = fmt.Sprintf("%s+%s.zip", cName, cleanNext)
-				
+
 				placed = true
 				break
 			}
@@ -163,11 +163,11 @@ func formatChunkNames(chunks []*Chunk) []ExportChunk {
 	for _, c := range chunks {
 		prefixCounts[c.Prefix]++
 		name := fmt.Sprintf("%s.zip", c.Prefix)
-		
+
 		if prefixTotals[c.Prefix] > 1 {
 			name = fmt.Sprintf("%s_part%d.zip", c.Prefix, prefixCounts[c.Prefix])
 		}
-		
+
 		exports = append(exports, ExportChunk{
 			ZipName: name,
 			Files:   c.Files,
@@ -188,7 +188,7 @@ func buildTree(files []string, basePrefix string) *Node {
 
 		parts := strings.Split(relPath, string(filepath.Separator))
 		curr := root
-		
+
 		for i := 0; i < len(parts)-1; i++ {
 			dirName := parts[i]
 			if curr.SubDirs[dirName] == nil {

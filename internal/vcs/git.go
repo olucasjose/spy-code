@@ -28,13 +28,13 @@ func IsInsideRepo() bool {
 // StreamBlob lê os bytes diretamente dos objetos internos do Git (isolado do disco rígido)
 func StreamBlob(commit, path string, dest io.Writer) error {
 	gitPath := filepath.ToSlash(path) // Garante o padrão UNIX exigido pelo Git
-	
+
 	cmd := exec.Command("git", "show", fmt.Sprintf("%s:%s", commit, gitPath))
 	cmd.Stdout = dest // Streaming direto
-	
+
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("falha ao ler blob do git: %s (stderr: %s)", err, strings.TrimSpace(stderr.String()))
 	}
@@ -79,19 +79,19 @@ func GetRelativePath(target string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	gitRoot := GetRoot()
 	if gitRoot == "" {
 		return "", fmt.Errorf("falha ao localizar raiz do git")
 	}
-	
+
 	if !strings.HasPrefix(absTarget, gitRoot) {
 		return "", fmt.Errorf("o alvo '%s' encontra-se fora do repositório atual", target)
 	}
-	
+
 	relPath := strings.TrimPrefix(absTarget, gitRoot)
 	relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
-	
+
 	return filepath.ToSlash(relPath), nil
 }
 
@@ -112,7 +112,7 @@ func GetChangedFiles(c1, c2 string) ([]DiffStatus, error) {
 		if line == "" {
 			continue
 		}
-		
+
 		parts := strings.Split(line, "\t")
 		if len(parts) < 2 {
 			continue
