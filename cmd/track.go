@@ -53,7 +53,7 @@ var trackCmd = &cobra.Command{
 			return nil
 		}
 
-		resolvedTargets, err := resolveTagPaths(tagName, validTargets)
+		resolvedTargets, err := fs.ResolveTagPaths(tagName, validTargets)
 		if err != nil {
 			return fmt.Errorf("erro de resolução: %w", err)
 		}

@@ -52,7 +52,7 @@ var exportCmd = &cobra.Command{
 			return fmt.Errorf("a tag '%s' não possui alvos rastreados ou não existe", tagName)
 		}
 
-		resolvedFiles, err := restorePathsForDisk(tagName, rawFiles)
+		resolvedFiles, err := fs.RestorePathsForDisk(tagName, rawFiles)
 		if err != nil {
 			return fmt.Errorf("erro de escopo estrutural: %w", err)
 		}
@@ -67,13 +67,13 @@ var exportCmd = &cobra.Command{
 		for p := range ignoredMap {
 			igPaths = append(igPaths, p)
 		}
-		if resIgPaths, err := restorePathsForDisk(tagName, igPaths); err == nil {
+		if resIgPaths, err := fs.RestorePathsForDisk(tagName, igPaths); err == nil {
 			for _, p := range resIgPaths {
 				restoredIgnored[p] = true
 			}
 		}
 
-		files := expandPathsToFiles(resolvedFiles, restoredIgnored)
+		files := fs.ExpandPathsToFiles(resolvedFiles, restoredIgnored)
 		if len(files) == 0 {
 			return fmt.Errorf("nenhum arquivo válido encontrado (possivelmente todos foram ignorados)")
 		}

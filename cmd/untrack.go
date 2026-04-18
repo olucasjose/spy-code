@@ -24,7 +24,7 @@ var untrackCmd = &cobra.Command{
 		tagName := args[len(args)-1]
 		targets := args[:len(args)-1]
 
-		resolvedTargets, err := resolveTagPaths(tagName, targets)
+		resolvedTargets, err := fs.ResolveTagPaths(tagName, targets)
 		if err != nil {
 			return fmt.Errorf("erro de resolução: %w", err)
 		}

@@ -59,8 +59,8 @@ var pruneCmd = &cobra.Command{
 				continue
 			}
 
-			resolvedFiles, errF := restorePathsForDisk(tagName, rawFiles)
-			resolvedIgnored, errI := restorePathsForDisk(tagName, rawIgnored)
+			resolvedFiles, errF := fs.RestorePathsForDisk(tagName, rawFiles)
+			resolvedIgnored, errI := fs.RestorePathsForDisk(tagName, rawIgnored)
 
 			if errF == nil {
 				for i, p := range resolvedFiles {

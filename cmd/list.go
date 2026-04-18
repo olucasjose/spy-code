@@ -162,7 +162,7 @@ var listCmd = &cobra.Command{
 			return nil
 		}
 
-		resolvedFiles, err := restorePathsForDisk(tagName, files)
+		resolvedFiles, err := fs.RestorePathsForDisk(tagName, files)
 		if err != nil {
 			return fmt.Errorf("erro de escopo estrutural: %w", err)
 		}
@@ -174,11 +174,11 @@ var listCmd = &cobra.Command{
 			restoredIgnored := make(map[string]bool)
 			var igPaths []string
 			for p := range ignoredMap { igPaths = append(igPaths, p) }
-			if resIgPaths, err := restorePathsForDisk(tagName, igPaths); err == nil {
+			if resIgPaths, err := fs.RestorePathsForDisk(tagName, igPaths); err == nil {
 				for _, p := range resIgPaths { restoredIgnored[p] = true }
 			}
 
-			files = expandPathsToFiles(files, restoredIgnored)
+			files = fs.ExpandPathsToFiles(files, restoredIgnored)
 		}
 
 		fmt.Printf("Alvos rastreados na tag '%s':\n", tagName)
