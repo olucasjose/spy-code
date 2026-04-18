@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"tae/internal/vcs"
 	"archive/zip"
 	"bytes"
 	"fmt"
@@ -54,7 +55,7 @@ var gitExportCmd = &cobra.Command{
 
 		var files []string
 		if !gitExportNoIgnore {
-			repoID := getGitRepoID()
+			repoID := vcs.GetRepoID()
 			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
 			if err != nil {
 				fmt.Printf("Aviso: Falha ao carregar denylist do repositório: %v\n", err)
@@ -88,7 +89,7 @@ var gitExportCmd = &cobra.Command{
 		var printMu sync.Mutex
 
 		if gitExportZip {
-			repoName := getGitRepoName()
+			repoName := vcs.GetRepoName()
 			baseName := fmt.Sprintf("%s-%s", repoName, commit)
 
 			chunks := grouper.GroupFiles(files, gitExportLimit, baseName, gitExportMerge)
@@ -187,7 +188,7 @@ func createGitZipChunk(zipPath string, files []string, basePrefix, commit string
 		writer, err := archive.Create(relPath)
 		if err != nil { return err }
 
-		if err := streamGitBlob(commit, path, writer); err != nil {
+		if err := vcs.StreamBlob(commit, path, writer); err != nil {
 			return err
 		}
 	}
@@ -214,7 +215,7 @@ func gitFlatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest, com
 			if err != nil {
 				errOut = fmt.Errorf("Erro ao criar %s: %v", path, err)
 			} else {
-				if err := streamGitBlob(commit, path, destFile); err != nil {
+				if err := vcs.StreamBlob(commit, path, destFile); err != nil {
 					errOut = fmt.Errorf("Erro ao exportar conteúdo de %s: %v", path, err)
 				}
 				destFile.Close()

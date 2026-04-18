@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"tae/internal/vcs"
 	"fmt"
 
 	"tae/internal/storage"
@@ -18,11 +19,11 @@ var gitIgnoreCmd = &cobra.Command{
 	Short: "Gerencia a denylist (Exclusion Index) atrelada ao repositório Git atual",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		repoID := getGitRepoID()
+		repoID := vcs.GetRepoID()
 
 		var validTargets []string
 		for _, target := range args {
-			relPath, err := getGitRelativePath(target)
+			relPath, err := vcs.GetRelativePath(target)
 			if err != nil {
 				fmt.Printf("Aviso: %v. Ignorando alvo.\n", err)
 				continue

@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"tae/internal/vcs"
 	"fmt"
 	"strings"
 
@@ -27,11 +28,11 @@ var createCmd = &cobra.Command{
 
 		var repoID, repoName string
 		if createGit {
-			if !isInsideGitRepo() {
+			if !vcs.IsInsideRepo() {
 				return fmt.Errorf("a flag --git exige que o comando seja executado dentro de um repositório Git")
 			}
-			repoID = getGitRepoID()
-			repoName = getGitRepoName()
+			repoID = vcs.GetRepoID()
+			repoName = vcs.GetRepoName()
 		}
 
 		meta := storage.TagMeta{Type: storage.TagTypeLocal}
@@ -40,7 +41,7 @@ var createCmd = &cobra.Command{
 				Type:     storage.TagTypeGit,
 				RepoID:   repoID,
 				RepoName: repoName,
-				GitRoot:  getGitRoot(),
+				GitRoot:  vcs.GetRoot(),
 			}
 		}
 

@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"tae/internal/vcs"
 	"fmt"
 	"path/filepath"
 	"tae/internal/storage"
@@ -18,10 +19,10 @@ func resolveTagPaths(tagName string, targets []string) ([]string, error) {
 
 	var resolved []string
 	if meta.Type == storage.TagTypeGit {
-		if !isInsideGitRepo() {
+		if !vcs.IsInsideRepo() {
 			return nil, fmt.Errorf("a tag '%s' pertence ao Git, mas você não está em um repositório", tagName)
 		}
-		currentRepoID := getGitRepoID()
+		currentRepoID := vcs.GetRepoID()
 		if meta.RepoID != "" && meta.RepoID != currentRepoID {
 			displayName := meta.RepoName
 			if displayName == "" { displayName = meta.RepoID } // Fallback
@@ -29,7 +30,7 @@ func resolveTagPaths(tagName string, targets []string) ([]string, error) {
 		}
 
 		for _, t := range targets {
-			relPath, err := getGitRelativePath(t)
+			relPath, err := vcs.GetRelativePath(t)
 			if err != nil {
 				return nil, fmt.Errorf("falha no alvo '%s': %w", t, err)
 			}
@@ -60,12 +61,12 @@ func restorePathsForDisk(tagName string, paths []string) ([]string, error) {
 
 		// Fallback de retrocompatibilidade para tags criadas antes desta correção
 		if gitRoot == "" {
-			if !isInsideGitRepo() || getGitRepoID() != meta.RepoID {
+			if !vcs.IsInsideRepo() || vcs.GetRepoID() != meta.RepoID {
 				displayName := meta.RepoName
 				if displayName == "" { displayName = meta.RepoID }
 				return nil, fmt.Errorf("esta tag não possui a raiz do Git salva. Execute este comando dentro do repositório [%s] uma vez para que ela seja lida", displayName)
 			}
-			gitRoot = getGitRoot()
+			gitRoot = vcs.GetRoot()
 		}
 
 		var absPaths []string

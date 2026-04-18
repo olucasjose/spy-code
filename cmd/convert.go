@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"tae/internal/vcs"
 	"fmt"
 	"path/filepath"
 
@@ -57,14 +58,14 @@ var convertCmd = &cobra.Command{
 			if meta.Type == storage.TagTypeGit {
 				return fmt.Errorf("a tag '%s' já pertence ao Git")
 			}
-			if !isInsideGitRepo() {
+			if !vcs.IsInsideRepo() {
 				return fmt.Errorf("você precisa estar dentro de um repositório Git para converter esta tag")
 			}
 
-			repoID := getGitRepoID()
+			repoID := vcs.GetRepoID()
 
 			for _, k := range filesKeys {
-				relPath, err := getGitRelativePath(k)
+				relPath, err := vcs.GetRelativePath(k)
 				if err != nil {
 					return fmt.Errorf("o caminho '%s' está fora do repositório. Mova ou remova-o da tag antes de converter", k)
 				}
@@ -73,7 +74,7 @@ var convertCmd = &cobra.Command{
 				}
 			}
 			for _, k := range ignoredKeys {
-				relPath, err := getGitRelativePath(k)
+				relPath, err := vcs.GetRelativePath(k)
 				if err != nil {
 					return fmt.Errorf("o caminho da denylist '%s' está fora do repositório", k)
 				}
@@ -84,18 +85,18 @@ var convertCmd = &cobra.Command{
 
 			meta.Type = storage.TagTypeGit
 			meta.RepoID = repoID
-			meta.RepoName = getGitRepoName()
-			meta.GitRoot = getGitRoot()
+			meta.RepoName = vcs.GetRepoName()
+			meta.GitRoot = vcs.GetRoot()
 
 		} else {
 			if meta.Type == storage.TagTypeLocal {
 				return fmt.Errorf("a tag '%s' já é Local")
 			}
-			if !isInsideGitRepo() || getGitRepoID() != meta.RepoID {
+			if !vcs.IsInsideRepo() || vcs.GetRepoID() != meta.RepoID {
 				return fmt.Errorf("você precisa estar dentro do repositório Git original (%s) para reverter esta tag", meta.RepoID)
 			}
 
-			gitRoot := getGitRoot()
+			gitRoot := vcs.GetRoot()
 
 			for _, k := range filesKeys {
 				absPath := filepath.ToSlash(filepath.Join(gitRoot, k))

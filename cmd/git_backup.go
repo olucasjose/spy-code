@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"tae/internal/vcs"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -37,8 +38,8 @@ var gitBackupSaveCmd = &cobra.Command{
 			return fmt.Errorf("o destino '%s' não é um diretório válido ou não existe", destDir)
 		}
 
-		repoID := getGitRepoID()
-		repoName := getGitRepoName()
+		repoID := vcs.GetRepoID()
+		repoName := vcs.GetRepoName()
 		timestamp := time.Now().Format("20060102_150405")
 		filename := fmt.Sprintf("%s_%s_tae-backup.json", repoName, timestamp)
 		destFile := filepath.Join(destDir, filename)
@@ -53,7 +54,7 @@ var gitBackupRestoreCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		srcFile := args[0]
-		repoID := getGitRepoID()
+		repoID := vcs.GetRepoID()
 		
 		return executeImport(repoID, srcFile)
 	},
@@ -124,7 +125,7 @@ func executeImport(currentRepoID, srcFile string) error {
 		return fmt.Errorf("o arquivo de backup pertence ao repositório [%s], mas você está tentando importá-lo no repositório atual", origem)
 	}
 
-	currentGitRoot := getGitRoot()
+	currentGitRoot := vcs.GetRoot()
 	if err := storage.RestoreGitRepositoryData(currentGitRoot, backup); err != nil {
 		return fmt.Errorf("erro fatal durante a restauração: %w", err)
 	}
