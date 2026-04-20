@@ -6,6 +6,8 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"time"
+	"path/filepath"
 	"os"
 	"os/exec"
 	"runtime"
@@ -29,6 +31,7 @@ var (
 	gitExportFlatten  bool
 	gitExportQuiet    bool
 	gitExportTxt      bool
+	gitExportSingle bool
 )
 
 var gitExportCmd = &cobra.Command{
@@ -42,6 +45,9 @@ var gitExportCmd = &cobra.Command{
 		gitExec := exec.Command("git", "ls-tree", "-r", "--name-only", commit)
 		var out bytes.Buffer
 		gitExec.Stdout = &out
+		if gitExportSingle && (gitExportZip || gitExportFlatten) {
+					return fmt.Errorf("a flag --single-file (-s) é exclusiva e não pode ser usada simultaneamente com --zip ou --flatten")
+				}
 		if err := gitExec.Run(); err != nil {
 			return fmt.Errorf("erro ao ler árvore do Git. Verifique o repositório e o hash")
 		}
@@ -95,7 +101,20 @@ var gitExportCmd = &cobra.Command{
 			AppendTxt:  gitExportTxt,
 		}
 
-		if gitExportZip {
+		if gitExportSingle {
+			timestamp := time.Now().Format("20060102_150405")
+						fileName := fmt.Sprintf("%s_%s.txt", commit, timestamp)
+						fullPath := filepath.Join(destPath, fileName)
+			
+						fmt.Printf("Iniciando exportação Single-File (Repomix Style) do commit %s. %d arquivo(s) para '%s'...\n", commit, len(files), fullPath)
+						if !gitExportQuiet {
+							fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
+						}
+						if err := exporter.ExportSingleFile(fullPath, files, opts); err != nil {
+							return err
+						}
+						fmt.Printf("\nSucesso! Arquivo consolidado gerado em '%s'.\n", fullPath)
+		} else if gitExportZip {
 			repoName := vcs.GetRepoName()
 			baseName := fmt.Sprintf("%s-%s", repoName, commit)
 			chunks := grouper.GroupFiles(files, gitExportLimit, baseName, gitExportMerge)
@@ -123,5 +142,6 @@ func init() {
 	gitExportCmd.Flags().BoolVarP(&gitExportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
 	gitExportCmd.Flags().BoolVarP(&gitExportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
 	gitExportCmd.Flags().BoolVar(&gitExportTxt, "txt", false, "Adiciona a extensão .txt a todos os arquivos exportados")
+	gitExportCmd.Flags().BoolVarP(&gitExportSingle, "single-file", "s", false, "Exporta todos os arquivos em um único arquivo de texto plano (Repomix Style)")
 	gitCmd.AddCommand(gitExportCmd)
 }

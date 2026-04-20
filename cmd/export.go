@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
+	"path/filepath"
 
 	"tae/internal/exporter"
 	"tae/internal/fs"
@@ -24,6 +26,7 @@ var (
 	exportFlatten bool
 	exportQuiet   bool
 	exportTxt     bool
+	exportSingle bool
 )
 
 var exportCmd = &cobra.Command{
@@ -45,6 +48,9 @@ var exportCmd = &cobra.Command{
 		destPath := args[1]
 
 		rawFiles, err := storage.GetFilesByTag(tagName)
+		if exportSingle && (exportZip || exportFlatten) {
+					return fmt.Errorf("a flag --single-file (-s) é exclusiva e não pode ser usada simultaneamente com --zip ou --flatten")
+				}
 		if err != nil {
 			return fmt.Errorf("erro ao buscar rastreamento da tag: %w", err)
 		}
@@ -98,21 +104,34 @@ var exportCmd = &cobra.Command{
 			AppendTxt:  exportTxt,
 		}
 
-		if exportZip {
-			chunks := grouper.GroupFiles(files, exportLimit, tagName, exportMerge)
-			fmt.Printf("Iniciando exportação em ZIP. %d arquivo(s) expandido(s) divididos em %d lote(s) para '%s'...\n", len(files), len(chunks), destPath)
-			if !exportQuiet {
-				fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
-			}
-			exporter.ExportZip(chunks, numWorkers, opts)
-			fmt.Printf("\nSucesso! %d arquivo(s) zip gerado(s) na pasta '%s'.\n", len(chunks), destPath)
-		} else {
-			fmt.Printf("Iniciando exportação plana de %d arquivo(s) para '%s' com %d worker(s)....\n", len(files), destPath, numWorkers)
-			exporter.ExportFlat(files, numWorkers, opts)
-			fmt.Printf("\nSucesso! Arquivos exportados para a pasta '%s'.\n", destPath)
-		}
-		return nil
-	},
+		if exportSingle {
+					timestamp := time.Now().Format("20060102_150405")
+					fileName := fmt.Sprintf("%s_%s.txt", tagName, timestamp)
+					fullPath := filepath.Join(destPath, fileName)
+		
+					fmt.Printf("Iniciando exportação Single-File (Repomix Style). %d arquivo(s) expandido(s) para '%s'...\n", len(files), fullPath)
+					if !exportQuiet {
+						fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
+					}
+					if err := exporter.ExportSingleFile(fullPath, files, opts); err != nil {
+						return err
+					}
+					fmt.Printf("\nSucesso! Arquivo consolidado gerado em '%s'.\n", fullPath)
+				} else if exportZip {
+					chunks := grouper.GroupFiles(files, exportLimit, tagName, exportMerge)
+					fmt.Printf("Iniciando exportação em ZIP. %d arquivo(s) expandido(s) divididos em %d lote(s) para '%s'...\n", len(files), len(chunks), destPath)
+					if !exportQuiet {
+						fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
+					}
+					exporter.ExportZip(chunks, numWorkers, opts)
+					fmt.Printf("\nSucesso! %d arquivo(s) zip gerado(s) na pasta '%s'.\n", len(chunks), destPath)
+				} else {
+					fmt.Printf("Iniciando exportação plana de %d arquivo(s) para '%s' com %d worker(s)....\n", len(files), destPath, numWorkers)
+					exporter.ExportFlat(files, numWorkers, opts)
+					fmt.Printf("\nSucesso! Arquivos exportados para a pasta '%s'.\n", destPath)
+				}
+				return nil
+			},
 }
 
 func init() {
@@ -122,5 +141,6 @@ func init() {
 	exportCmd.Flags().BoolVarP(&exportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
 	exportCmd.Flags().BoolVarP(&exportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
 	exportCmd.Flags().BoolVar(&exportTxt, "txt", false, "Adiciona a extensão .txt a todos os arquivos exportados")
+	exportCmd.Flags().BoolVarP(&exportSingle, "single-file", "s", false, "Exporta todos os arquivos em um único arquivo de texto plano (Repomix Style)")
 	rootCmd.AddCommand(exportCmd)
 }
