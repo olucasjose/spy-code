@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"tae/internal/render"
 	"tae/internal/vcs"
@@ -51,6 +52,20 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 
 	fmt.Fprintln(outFile, "```\n")
 	fmt.Fprintln(outFile, "# Arquivos do Escopo")
+
+	// Ordenação Hierárquica em Memória
+	sort.Slice(files, func(i, j int) bool {
+		relI := resolveRelPath(files[i], opts.BasePrefix, opts.FlattenMap)
+		relJ := resolveRelPath(files[j], opts.BasePrefix, opts.FlattenMap)
+
+		dirI := filepath.Dir(relI)
+		dirJ := filepath.Dir(relJ)
+
+		if dirI == dirJ {
+			return filepath.Base(relI) < filepath.Base(relJ)
+		}
+		return dirI < dirJ
+	})
 
 	// 2. Despeja o conteúdo de cada arquivo sequencialmente
 	for _, path := range files {
