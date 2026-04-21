@@ -126,8 +126,8 @@ var exportCmd = &cobra.Command{
 			exporter.ExportZip(chunks, numWorkers, opts)
 			fmt.Printf("\nSucesso! %d arquivo(s) zip gerado(s) na pasta '%s'.\n", len(chunks), destPath)
 		} else {
-			fmt.Printf("Iniciando exportação plana de %d arquivo(s) para '%s' com %d worker(s)....\n", len(files), destPath, numWorkers)
-			exporter.ExportFlat(files, numWorkers, opts)
+			fmt.Printf("Iniciando exportação padrão de %d arquivo(s) para '%s' com %d worker(s)....\n", len(files), destPath, numWorkers)
+			exporter.ExportStandard(files, numWorkers, opts)
 			fmt.Printf("\nSucesso! Arquivos exportados para a pasta '%s'.\n", destPath)
 		}
 		return nil

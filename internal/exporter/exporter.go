@@ -170,8 +170,8 @@ func buildZip(zipPath string, files []string, opts ExportOptions, br *vcs.BatchR
 	return nil
 }
 
-// ExportFlat orquestra cópias planas de arquivos reconstruindo ou nivelando a árvore
-func ExportFlat(files []string, workers int, opts ExportOptions) {
+// ExportStandard orquestra cópias planas de arquivos reconstruindo ou nivelando a árvore
+func ExportStandard(files []string, workers int, opts ExportOptions) {
 	jobs := make(chan string, len(files))
 	logChan := make(chan string, 100)
 	var wg sync.WaitGroup

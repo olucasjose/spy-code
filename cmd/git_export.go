@@ -126,8 +126,8 @@ var gitExportCmd = &cobra.Command{
 			exporter.ExportZip(chunks, numWorkers, opts)
 			fmt.Printf("\nSucesso! %d arquivo(s) zip gerado(s) em '%s'.\n", len(chunks), destPath)
 		} else {
-			fmt.Printf("Iniciando exportação plana de %d arquivo(s) para '%s'...\n", len(files), destPath)
-			exporter.ExportFlat(files, numWorkers, opts)
+			fmt.Printf("Iniciando exportação padrão de %d arquivo(s) para '%s'...\n", len(files), destPath)
+			exporter.ExportStandard(files, numWorkers, opts)
 			fmt.Printf("\nSucesso! Arquivos exportados para '%s'.\n", destPath)
 		}
 		return nil
