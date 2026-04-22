@@ -56,7 +56,7 @@ var convertCmd = &cobra.Command{
 
 		if convertToGit {
 			if meta.Type == storage.TagTypeGit {
-				return fmt.Errorf("a tag '%s' já pertence ao Git")
+				return fmt.Errorf("a tag '%s' já pertence ao Git", tagName)
 			}
 			if !vcs.IsInsideRepo() {
 				return fmt.Errorf("você precisa estar dentro de um repositório Git para converter esta tag")
@@ -90,7 +90,7 @@ var convertCmd = &cobra.Command{
 
 		} else {
 			if meta.Type == storage.TagTypeLocal {
-				return fmt.Errorf("a tag '%s' já é Local")
+				return fmt.Errorf("a tag '%s' já é Local", tagName)
 			}
 			if !vcs.IsInsideRepo() || vcs.GetRepoID() != meta.RepoID {
 				return fmt.Errorf("você precisa estar dentro do repositório Git original (%s) para reverter esta tag", meta.RepoID)
