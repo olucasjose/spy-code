@@ -76,7 +76,7 @@ func LoadFilter() (*ExtensionFilter, error) {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		cfg.BlockedExtensions = defaultBlocked
 		cfg.AllowedExtensions = defaultAllowed
-		
+
 		sort.Strings(cfg.BlockedExtensions)
 		sort.Strings(cfg.AllowedExtensions)
 

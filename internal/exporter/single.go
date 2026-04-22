@@ -101,10 +101,10 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 				} else {
 					fmt.Printf("\n[?] A extensão '%s' do arquivo '%s' é desconhecida.\n", ext, relPath)
 					fmt.Printf("Deseja incluir seu conteúdo e PERMITIR essa extensão no futuro? [s/N]: ")
-					
+
 					response, _ := reader.ReadString('\n')
 					response = strings.TrimSpace(strings.ToLower(response))
-					
+
 					if response == "s" || response == "y" {
 						if err := filter.LearnExtension(ext, false); err != nil {
 							fmt.Printf("Aviso: Falha ao salvar regra de permissão: %v\n", err)
@@ -125,10 +125,10 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 			} else {
 				fmt.Printf("\n[?] O arquivo '%s' não possui extensão.\n", relPath)
 				fmt.Printf("Deseja incluir seu conteúdo nesta exportação? (Esta decisão não será salva) [s/N]: ")
-				
+
 				response, _ := reader.ReadString('\n')
 				response = strings.TrimSpace(strings.ToLower(response))
-				
+
 				if response == "s" || response == "y" {
 					skip = false
 				} else {
