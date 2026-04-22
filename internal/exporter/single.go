@@ -118,6 +118,23 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 					}
 				}
 			}
+		} else {
+			// Arquivo SEM extensão
+			if opts.Quiet {
+				skip = true
+			} else {
+				fmt.Printf("\n[?] O arquivo '%s' não possui extensão.\n", relPath)
+				fmt.Printf("Deseja incluir seu conteúdo nesta exportação? (Esta decisão não será salva) [s/N]: ")
+				
+				response, _ := reader.ReadString('\n')
+				response = strings.TrimSpace(strings.ToLower(response))
+				
+				if response == "s" || response == "y" {
+					skip = false
+				} else {
+					skip = true
+				}
+			}
 		}
 
 		if skip {
