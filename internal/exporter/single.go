@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 Lucas José de Lima Silva
-
 package exporter
 
 import (
@@ -12,12 +11,11 @@ import (
 	"strings"
 
 	"tae/internal/config"
-	"tae/internal/render"
 	"tae/internal/vcs"
 )
 
 // ExportSingleFile consolida todos os arquivos monitorados em um único arquivo texto plano otimizado para LLMs.
-// É executado de forma sequencial intencionalmente para garantir ordenação determinística e evitar consumo excessivo de RAM.
+// Removemos listagens redundantes no topo para priorizar a densidade de informação útil por token.
 func ExportSingleFile(destPath string, files []string, opts ExportOptions) error {
 	filter, err := config.LoadFilter()
 	if err != nil {
@@ -45,27 +43,10 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 		defer br.Close()
 	}
 
-	// 1. Escreve Cabeçalho e Metadados
-	fmt.Fprintln(outFile, "================================================================")
-	fmt.Fprintln(outFile, " TAE Export - Single File")
-	if opts.GitCommit != "" {
-		fmt.Fprintf(outFile, " Commit Original: %s\n", opts.GitCommit)
-	}
-	fmt.Fprintln(outFile, "================================================================")
-	fmt.Fprintln(outFile, "\n# Estrutura de Diretórios")
-	fmt.Fprintln(outFile, "```")
-
-	rootNode := render.BuildVisualTree(files, opts.BasePrefix)
-	render.PrintTree(outFile, rootNode, "", 0, 0, nil)
-
-	fmt.Fprintln(outFile, "```\n")
-	fmt.Fprintln(outFile, "# Arquivos do Escopo")
-
-	// Ordenação Hierárquica em Memória
+	// Ordenação Hierárquica em Memória para consistência no dump
 	sort.Slice(files, func(i, j int) bool {
 		relI := resolveRelPath(files[i], opts.BasePrefix, opts.FlattenMap)
 		relJ := resolveRelPath(files[j], opts.BasePrefix, opts.FlattenMap)
-
 		dirI := filepath.Dir(relI)
 		dirJ := filepath.Dir(relJ)
 
@@ -74,6 +55,14 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 		}
 		return dirI < dirJ
 	})
+
+	// 1. Cabeçalho Minimalista (VP/CEO optimization)
+	fmt.Fprintln(outFile, "———")
+	fmt.Fprintln(outFile, " TAE Export - Single File")
+	if opts.GitCommit != "" {
+		fmt.Fprintf(outFile, " Commit Original: %s\n", opts.GitCommit)
+	}
+	fmt.Fprintln(outFile, "———")
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -84,9 +73,10 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 			relPath += ".txt"
 		}
 
-		fmt.Fprintln(outFile, "\n================================================================")
+		// Identificador de arquivo (Gerente optimization: o caminho já está aqui)
+		fmt.Fprintln(outFile, "\n———")
 		fmt.Fprintf(outFile, "File: %s\n", relPath)
-		fmt.Fprintln(outFile, "================================================================")
+		fmt.Fprintln(outFile, "———")
 
 		ext := strings.ToLower(filepath.Ext(path))
 		skip := false
@@ -96,15 +86,12 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 				skip = true
 			} else if !filter.Allowed[ext] {
 				if opts.Quiet {
-					// Em modo quiet, omite por segurança mas não polui o JSON com regras inferidas
 					skip = true
 				} else {
 					fmt.Printf("\n[?] A extensão '%s' do arquivo '%s' é desconhecida.\n", ext, relPath)
 					fmt.Printf("Deseja incluir seu conteúdo e PERMITIR essa extensão no futuro? [s/N]: ")
-
 					response, _ := reader.ReadString('\n')
 					response = strings.TrimSpace(strings.ToLower(response))
-
 					if response == "s" || response == "y" {
 						if err := filter.LearnExtension(ext, false); err != nil {
 							fmt.Printf("Aviso: Falha ao salvar regra de permissão: %v\n", err)
@@ -119,26 +106,18 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 				}
 			}
 		} else {
-			// Arquivo SEM extensão
 			if opts.Quiet {
 				skip = true
 			} else {
 				fmt.Printf("\n[?] O arquivo '%s' não possui extensão.\n", relPath)
-				fmt.Printf("Deseja incluir seu conteúdo nesta exportação? (Esta decisão não será salva) [s/N]: ")
-
+				fmt.Printf("Deseja incluir seu conteúdo nesta exportação? [s/N]: ")
 				response, _ := reader.ReadString('\n')
 				response = strings.TrimSpace(strings.ToLower(response))
-
-				if response == "s" || response == "y" {
-					skip = false
-				} else {
-					skip = true
-				}
+				skip = !(response == "s" || response == "y")
 			}
 		}
 
 		if skip {
-			fmt.Fprintln(outFile, "[Conteúdo de arquivo omitido: extensão não-texto bloqueada/desconhecida]")
 			if !opts.Quiet {
 				fmt.Printf("  -> Omitido: %s\n", relPath)
 			}
