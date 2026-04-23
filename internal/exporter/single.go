@@ -56,7 +56,6 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 		return dirI < dirJ
 	})
 
-	// 1. Cabeçalho Minimalista (VP/CEO optimization)
 	fmt.Fprintln(outFile, "———")
 	fmt.Fprintln(outFile, " TAE Export - Single File")
 	if opts.GitCommit != "" {
@@ -73,7 +72,6 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 			relPath += ".txt"
 		}
 
-		// Identificador de arquivo (Gerente optimization: o caminho já está aqui)
 		fmt.Fprintln(outFile, "\n———")
 		fmt.Fprintf(outFile, "File: %s\n", relPath)
 		fmt.Fprintln(outFile, "———")

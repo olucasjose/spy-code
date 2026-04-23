@@ -19,10 +19,8 @@ var deleteCmd = &cobra.Command{
 		tags, _ := storage.GetAllTags()
 		return tags, cobra.ShellCompDirectiveNoFileComp
 	},
-	// Gina: Assinatura alterada de Run para RunE
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := storage.DeleteTags(args); err != nil {
-			// Gina: Retorna o erro em vez de imprimir e chamar os.Exit(1)
 			return fmt.Errorf("falha ao deletar tags: %w", err)
 		}
 

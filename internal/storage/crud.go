@@ -15,7 +15,6 @@ func CreateTags(tags []string, meta TagMeta) error {
 	if err != nil {
 		return err
 	}
-	// Removido: defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
