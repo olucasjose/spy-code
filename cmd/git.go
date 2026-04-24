@@ -14,7 +14,7 @@ import (
 var gitCmd = &cobra.Command{
 	Use:   "git",
 	Short: "Agrupa comandos relacionados a operações do repositório Git",
-	Long:  "Comandos utilitários para integração com o Git, permitindo listar, exportar e gerar diffs empacotados.",
+	Long:  "Comandos utilitários para integração com o Git, permitindo listar e exportar commits e tags em vários formatos",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if !vcs.IsInsideRepo() {
 			return fmt.Errorf("o diretório atual não pertence a um repositório Git. Navegue até a raiz ou subdiretório de um repositório válido antes de usar os comandos 'tae git'")

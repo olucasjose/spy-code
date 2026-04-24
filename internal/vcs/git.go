@@ -14,13 +14,6 @@ import (
 	"strings"
 )
 
-// DiffStatus representa o estado de um arquivo alterado no Git isolando a camada CLI de prints
-type DiffStatus struct {
-	Status   byte
-	Path     string
-	IsRename bool
-}
-
 // BatchReader gerencia um subprocesso persistente do git cat-file --batch
 type BatchReader struct {
 	cmd    *exec.Cmd
@@ -162,66 +155,6 @@ func GetRelativePath(target string) (string, error) {
 	relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
 
 	return filepath.ToSlash(relPath), nil
-}
-
-// GetChangedFiles retorna a lista e o status de arquivos alterados entre dois commits
-func GetChangedFiles(c1, c2 string) ([]DiffStatus, error) {
-	cmd := exec.Command("git", "diff", "--name-status", c1, c2)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("falha ao criar pipe para git diff: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("erro ao iniciar git diff:\n%s", stderr.String())
-	}
-
-	var changes []DiffStatus
-	scanner := bufio.NewScanner(stdout)
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-
-		parts := strings.Split(line, "\t")
-		if len(parts) < 2 {
-			continue
-		}
-
-		statusChar := strings.ToUpper(parts[0])[0]
-		var filePath string
-		isRename := false
-
-		if (statusChar == 'A' || statusChar == 'M') && len(parts) >= 2 {
-			filePath = parts[1]
-		} else if statusChar == 'R' && len(parts) >= 3 {
-			filePath = parts[2]
-			isRename = true
-		} else {
-			continue
-		}
-
-		changes = append(changes, DiffStatus{
-			Status:   statusChar,
-			Path:     filePath,
-			IsRename: isRename,
-		})
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("erro na leitura da stream do git diff: %w", err)
-	}
-
-	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("erro no git diff:\n%s", stderr.String())
-	}
-
-	return changes, nil
 }
 
 // ListTree lista a árvore de arquivos de um commit

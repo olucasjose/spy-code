@@ -14,7 +14,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:           "tae",
-	Version:       "6.7.1",
+	Version:       "7.0.0",
 	Short:         "Tae é um utilitário CLI para extração e empacotamento de código",
 	SilenceErrors: true,
 	SilenceUsage:  true,
@@ -58,8 +58,7 @@ Exemplo Termux (Android):
 
   # Integrações Git
   tae git list HEAD
-  tae git export HEAD~1 ./exportacao_commit -z -l 500
-  tae git diff HEAD~2 HEAD -l 100`,
+  tae git export HEAD~1 ./exportacao_commit -z -l 500`,
 }
 
 func init() {
