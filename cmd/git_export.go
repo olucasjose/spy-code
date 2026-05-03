@@ -102,11 +102,13 @@ var gitExportCmd = &cobra.Command{
 		}
 
 		if gitExportSingle {
+			repoName := vcs.GetRepoName()
 			timestamp := time.Now().Format("20060102_150405")
-			fileName := fmt.Sprintf("%s_%s.txt", commit, timestamp)
+			fileName := fmt.Sprintf("%s-%s_%s.txt", repoName, commit, timestamp)
 			fullPath := filepath.Join(destPath, fileName)
 
 			fmt.Printf("Iniciando exportação Single-File (Single File) do commit %s. %d arquivo(s) para '%s'...\n", commit, len(files), fullPath)
+
 			if !gitExportQuiet {
 				fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
 			}
