@@ -3,7 +3,10 @@
 
 package main
 
-import "tae/cmd"
+import (
+	"tae/cmd"
+	_ "tae/internal/sys"
+)
 
 func main() {
 	cmd.Execute()
