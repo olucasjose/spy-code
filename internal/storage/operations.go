@@ -167,3 +167,65 @@ func UpdateTagScope(tagName string, meta TagMeta, swapFiles, swapIgnored map[str
 
 	return tx.Commit()
 }
+
+// ReplaceTagState substitui atomicamente todo o rastreamento e a denylist de uma tag.
+// Operação protegida por transação (Tudo ou Nada) para garantir integridade.
+func ReplaceTagState(tagName string, newFiles, newIgnored []string) error {
+	db, err := GetDB()
+	if err != nil {
+		return err
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	// Idioma padrão do Go: O Rollback falhará silenciosamente se o Commit já tiver sido executado com sucesso.
+	defer tx.Rollback()
+
+	// 1. Limpeza completa (Blank Slate)
+	if _, err := tx.Exec("DELETE FROM files_tracked WHERE tag_name = ?", tagName); err != nil {
+		return fmt.Errorf("falha ao limpar estado anterior de arquivos rastreados: %w", err)
+	}
+
+	if _, err := tx.Exec("DELETE FROM files_ignored WHERE tag_name = ?", tagName); err != nil {
+		return fmt.Errorf("falha ao limpar estado anterior da denylist: %w", err)
+	}
+
+	// 2. Reinserção de Arquivos Rastreados
+	if len(newFiles) > 0 {
+		stmtTrack, err := tx.Prepare("INSERT OR IGNORE INTO files_tracked (tag_name, path) VALUES (?, ?)")
+		if err != nil {
+			return fmt.Errorf("falha ao preparar statement de rastreamento: %w", err)
+		}
+		for _, f := range newFiles {
+			if _, err := stmtTrack.Exec(tagName, f); err != nil {
+				stmtTrack.Close()
+				return fmt.Errorf("falha ao gravar novo caminho rastreado '%s': %w", f, err)
+			}
+		}
+		stmtTrack.Close()
+	}
+
+	// 3. Reinserção da Denylist
+	if len(newIgnored) > 0 {
+		stmtIgnore, err := tx.Prepare("INSERT OR IGNORE INTO files_ignored (tag_name, path) VALUES (?, ?)")
+		if err != nil {
+			return fmt.Errorf("falha ao preparar statement da denylist: %w", err)
+		}
+		for _, i := range newIgnored {
+			if _, err := stmtIgnore.Exec(tagName, i); err != nil {
+				stmtIgnore.Close()
+				return fmt.Errorf("falha ao gravar novo caminho na denylist '%s': %w", i, err)
+			}
+		}
+		stmtIgnore.Close()
+	}
+
+	// 4. Selagem da Transação
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("erro fatal ao aplicar a transação no disco: %w", err)
+	}
+
+	return nil
+}
