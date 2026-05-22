@@ -14,19 +14,21 @@ import (
 	"tae/internal/fs"
 	"tae/internal/render"
 	"tae/internal/storage"
+	"tae/internal/vcs"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	listTree     bool
-	listDepth    int
-	listIgnore   string
-	listAbsolute bool
-	listExpand   bool
-	listIgnored  bool
-	listDetails  bool
-	listGroup    bool
+	listTree        bool
+	listDepth       int
+	listIgnore      string
+	listAbsolute    bool
+	listExpand      bool
+	listIgnored     bool
+	listDetails     bool
+	listGroup       bool
+	listCurrentRepo bool
 )
 
 var listCmd = &cobra.Command{
@@ -45,6 +47,18 @@ var listCmd = &cobra.Command{
 			tagsMeta, err := storage.GetAllTagsWithMeta()
 			if err != nil {
 				return fmt.Errorf("erro ao carregar tags: %w", err)
+			}
+
+			if listCurrentRepo {
+				if !vcs.IsInsideRepo() {
+					return fmt.Errorf("a flag --current-repo exige que o comando seja executado dentro de um repositório Git")
+				}
+				currentRepoID := vcs.GetRepoID()
+				for tag, meta := range tagsMeta {
+					if meta.Type != storage.TagTypeGit || meta.RepoID != currentRepoID {
+						delete(tagsMeta, tag)
+					}
+				}
 			}
 
 			if listGroup {
@@ -228,5 +242,6 @@ func init() {
 	listCmd.Flags().BoolVarP(&listIgnored, "ignored", "i", false, "Exibe apenas os arquivos na denylist permanente da tag")
 	listCmd.Flags().BoolVarP(&listDetails, "details", "d", false, "Exibe os metadados das tags em colunas, indicando se são Local ou Git")
 	listCmd.Flags().BoolVarP(&listGroup, "group", "g", false, "Agrupa a exibição de tags por repositório (com suporte a cores)")
+	listCmd.Flags().BoolVarP(&listCurrentRepo, "current-repo", "c", false, "Lista apenas as tags Git atreladas ao repositório atual")
 	rootCmd.AddCommand(listCmd)
 }
