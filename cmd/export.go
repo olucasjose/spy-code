@@ -20,13 +20,14 @@ import (
 )
 
 var (
-	exportZip     bool
-	exportLimit   int
-	exportMerge   bool
-	exportFlatten bool
-	exportQuiet   bool
-	exportTxt     bool
-	exportSingle  bool
+	exportZip         bool
+	exportLimit       int
+	exportMerge       bool
+	exportFlatten     bool
+	exportQuiet       bool
+	exportTxt         bool
+	exportSingle      bool
+	exportInteractive bool
 )
 
 var exportCmd = &cobra.Command{
@@ -97,11 +98,12 @@ var exportCmd = &cobra.Command{
 		}
 
 		opts := exporter.ExportOptions{
-			DestDir:    destPath,
-			BasePrefix: basePrefix,
-			FlattenMap: flattenMap,
-			Quiet:      exportQuiet,
-			AppendTxt:  exportTxt,
+			DestDir:     destPath,
+			BasePrefix:  basePrefix,
+			FlattenMap:  flattenMap,
+			Quiet:       exportQuiet,
+			AppendTxt:   exportTxt,
+			Interactive: exportInteractive,
 		}
 
 		if exportSingle {
@@ -109,7 +111,7 @@ var exportCmd = &cobra.Command{
 			fileName := fmt.Sprintf("%s_%s.txt", tagName, timestamp)
 			fullPath := filepath.Join(destPath, fileName)
 
-			fmt.Printf("Iniciando exportação Single-File (Single File). %d arquivo(s) expandido(s) para '%s'...\n", len(files), fullPath)
+			fmt.Printf("Iniciando exportação Single-File. %d arquivo(s) expandido(s) para '%s'...\n", len(files), fullPath)
 			if !exportQuiet {
 				fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
 			}
@@ -142,5 +144,6 @@ func init() {
 	exportCmd.Flags().BoolVarP(&exportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
 	exportCmd.Flags().BoolVar(&exportTxt, "txt", false, "Adiciona a extensão .txt a todos os arquivos exportados")
 	exportCmd.Flags().BoolVarP(&exportSingle, "single-file", "s", false, "Exporta todos os arquivos em um único arquivo de texto plano (Single File)")
+	exportCmd.Flags().BoolVarP(&exportInteractive, "interactive", "i", false, "Habilita a aprovação interativa manual baseada em extensões na extração Single File")
 	rootCmd.AddCommand(exportCmd)
 }

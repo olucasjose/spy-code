@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"tae/internal/vcs"
 	"time"
 
 	"tae/internal/exporter"
@@ -19,19 +18,21 @@ import (
 	"tae/internal/grouper"
 	"tae/internal/render"
 	"tae/internal/storage"
+	"tae/internal/vcs"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	gitExportZip      bool
-	gitExportLimit    int
-	gitExportMerge    bool
-	gitExportNoIgnore bool
-	gitExportFlatten  bool
-	gitExportQuiet    bool
-	gitExportTxt      bool
-	gitExportSingle   bool
+	gitExportZip         bool
+	gitExportLimit       int
+	gitExportMerge       bool
+	gitExportNoIgnore    bool
+	gitExportFlatten     bool
+	gitExportQuiet       bool
+	gitExportTxt         bool
+	gitExportSingle      bool
+	gitExportInteractive bool
 )
 
 var gitExportCmd = &cobra.Command{
@@ -93,12 +94,13 @@ var gitExportCmd = &cobra.Command{
 		}
 
 		opts := exporter.ExportOptions{
-			DestDir:    destPath,
-			BasePrefix: basePrefix,
-			FlattenMap: flattenMap,
-			Quiet:      gitExportQuiet,
-			GitCommit:  commit,
-			AppendTxt:  gitExportTxt,
+			DestDir:     destPath,
+			BasePrefix:  basePrefix,
+			FlattenMap:  flattenMap,
+			Quiet:       gitExportQuiet,
+			GitCommit:   commit,
+			AppendTxt:   gitExportTxt,
+			Interactive: gitExportInteractive,
 		}
 
 		if gitExportSingle {
@@ -107,7 +109,7 @@ var gitExportCmd = &cobra.Command{
 			fileName := fmt.Sprintf("%s-%s_%s.txt", repoName, commit, timestamp)
 			fullPath := filepath.Join(destPath, fileName)
 
-			fmt.Printf("Iniciando exportação Single-File (Single File) do commit %s. %d arquivo(s) para '%s'...\n", commit, len(files), fullPath)
+			fmt.Printf("Iniciando exportação Single-File do commit %s. %d arquivo(s) para '%s'...\n", commit, len(files), fullPath)
 
 			if !gitExportQuiet {
 				fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
@@ -145,5 +147,6 @@ func init() {
 	gitExportCmd.Flags().BoolVarP(&gitExportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
 	gitExportCmd.Flags().BoolVar(&gitExportTxt, "txt", false, "Adiciona a extensão .txt a todos os arquivos exportados")
 	gitExportCmd.Flags().BoolVarP(&gitExportSingle, "single-file", "s", false, "Exporta todos os arquivos em um único arquivo de texto plano (Single File)")
+	gitExportCmd.Flags().BoolVarP(&gitExportInteractive, "interactive", "i", false, "Habilita a aprovação interativa manual baseada em extensões na extração Single File")
 	gitCmd.AddCommand(gitExportCmd)
 }

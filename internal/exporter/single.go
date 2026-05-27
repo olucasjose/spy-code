@@ -4,6 +4,7 @@ package exporter
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,15 +12,20 @@ import (
 	"strings"
 
 	"tae/internal/config"
+	"tae/internal/filter"
 	"tae/internal/vcs"
 )
 
 // ExportSingleFile consolida todos os arquivos monitorados em um único arquivo texto plano otimizado para LLMs.
-// Removemos listagens redundantes no topo para priorizar a densidade de informação útil por token.
+// Bifurca o tratamento em modo interativo (baseado em JSON) ou detecção automatizada de binários via byte stream.
 func ExportSingleFile(destPath string, files []string, opts ExportOptions) error {
-	filter, err := config.LoadFilter()
-	if err != nil {
-		return fmt.Errorf("falha na camada de configuração: %w", err)
+	var cfgFilter *config.ExtensionFilter
+	if opts.Interactive {
+		var err error
+		cfgFilter, err = config.LoadFilter()
+		if err != nil {
+			return fmt.Errorf("falha na camada de configuração interativa: %w", err)
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
@@ -43,7 +49,6 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 		defer br.Close()
 	}
 
-	// Ordenação Hierárquica em Memória para consistência no dump
 	sort.Slice(files, func(i, j int) bool {
 		relI := resolveRelPath(files[i], opts.BasePrefix, opts.FlattenMap)
 		relJ := resolveRelPath(files[j], opts.BasePrefix, opts.FlattenMap)
@@ -63,77 +68,143 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 	}
 	fmt.Fprintln(outFile, "———")
 
-	reader := bufio.NewReader(os.Stdin)
+	var reader *bufio.Reader
+	if opts.Interactive {
+		reader = bufio.NewReader(os.Stdin)
+	}
 
-	// 2. Despeja o conteúdo de cada arquivo sequencialmente
 	for _, path := range files {
 		relPath := resolveRelPath(path, opts.BasePrefix, opts.FlattenMap)
 		if opts.AppendTxt {
 			relPath += ".txt"
 		}
 
-		fmt.Fprintln(outFile, "\n———")
-		fmt.Fprintf(outFile, "File: %s\n", relPath)
-		fmt.Fprintln(outFile, "———")
+		// Pré-renderizamos o cabeçalho em memória para injetarmos apenas se o conteúdo passar nos filtros
+		var headerBuf bytes.Buffer
+		fmt.Fprintln(&headerBuf, "\n———")
+		fmt.Fprintf(&headerBuf, "File: %s\n", relPath)
+		fmt.Fprintln(&headerBuf, "———")
 
-		ext := strings.ToLower(filepath.Ext(path))
-		skip := false
+		if opts.Interactive {
+			ext := strings.ToLower(filepath.Ext(path))
+			skip := false
 
-		if ext != "" {
-			if filter.Blocked[ext] {
-				skip = true
-			} else if !filter.Allowed[ext] {
+			if ext != "" {
+				if cfgFilter.Blocked[ext] {
+					skip = true
+				} else if !cfgFilter.Allowed[ext] {
+					if opts.Quiet {
+						skip = true
+					} else {
+						fmt.Printf("\n[?] A extensão '%s' do arquivo '%s' é desconhecida.\n", ext, relPath)
+						fmt.Printf("Deseja incluir seu conteúdo e PERMITIR essa extensão no futuro? [s/N]: ")
+						response, _ := reader.ReadString('\n')
+						response = strings.TrimSpace(strings.ToLower(response))
+						if response == "s" || response == "y" {
+							if err := cfgFilter.LearnExtension(ext, false); err != nil {
+								fmt.Printf("Aviso: Falha ao salvar regra de permissão: %v\n", err)
+							}
+							skip = false
+						} else {
+							if err := cfgFilter.LearnExtension(ext, true); err != nil {
+								fmt.Printf("Aviso: Falha ao salvar regra de bloqueio: %v\n", err)
+							}
+							skip = true
+						}
+					}
+				}
+			} else {
 				if opts.Quiet {
 					skip = true
 				} else {
-					fmt.Printf("\n[?] A extensão '%s' do arquivo '%s' é desconhecida.\n", ext, relPath)
-					fmt.Printf("Deseja incluir seu conteúdo e PERMITIR essa extensão no futuro? [s/N]: ")
+					fmt.Printf("\n[?] O arquivo '%s' não possui extensão.\n", relPath)
+					fmt.Printf("Deseja incluir seu conteúdo nesta exportação? [s/N]: ")
 					response, _ := reader.ReadString('\n')
 					response = strings.TrimSpace(strings.ToLower(response))
-					if response == "s" || response == "y" {
-						if err := filter.LearnExtension(ext, false); err != nil {
-							fmt.Printf("Aviso: Falha ao salvar regra de permissão: %v\n", err)
-						}
-						skip = false
-					} else {
-						if err := filter.LearnExtension(ext, true); err != nil {
-							fmt.Printf("Aviso: Falha ao salvar regra de bloqueio: %v\n", err)
-						}
-						skip = true
+					skip = !(response == "s" || response == "y")
+				}
+			}
+
+			if skip {
+				if !opts.Quiet {
+					fmt.Printf("  -> Omitido: %s\n", relPath)
+				}
+				continue
+			}
+
+			outFile.Write(headerBuf.Bytes())
+			err := writeContent(path, opts.GitCommit, outFile, br)
+			if err != nil {
+				fmt.Fprintf(outFile, "[Erro de I/O ao ler conteúdo deste arquivo: %v]\n", err)
+				if !opts.Quiet {
+					fmt.Printf("Aviso: Falha ao ler '%s': %v\n", relPath, err)
+				}
+			} else {
+				fmt.Fprintln(outFile, "")
+				if !opts.Quiet {
+					fmt.Printf("  -> Anexado: %s\n", relPath)
+				}
+			}
+
+		} else {
+			// Rota Autônoma: Detecção profunda de binários via I/O
+			if opts.GitCommit == "" {
+				isBin, err := filter.IsBinaryFile(path)
+				if err != nil {
+					outFile.Write(headerBuf.Bytes())
+					fmt.Fprintf(outFile, "[Erro ao verificar binário físico: %v]\n", err)
+					if !opts.Quiet {
+						fmt.Printf("Aviso: Falha ao ler '%s': %v\n", relPath, err)
+					}
+					continue
+				}
+
+				if isBin {
+					if !opts.Quiet {
+						fmt.Printf("  -> Omitido (Binário automático detectado no disco): %s\n", relPath)
+					}
+					continue
+				}
+
+				outFile.Write(headerBuf.Bytes())
+				if err := writeContent(path, opts.GitCommit, outFile, br); err != nil {
+					fmt.Fprintf(outFile, "[Erro de I/O ao ler conteúdo físico: %v]\n", err)
+					if !opts.Quiet {
+						fmt.Printf("Aviso: Falha de I/O na montagem do arquivo '%s': %v\n", relPath, err)
+					}
+				} else {
+					fmt.Fprintln(outFile, "")
+					if !opts.Quiet {
+						fmt.Printf("  -> Anexado: %s\n", relPath)
+					}
+				}
+			} else {
+				// Rota de Fluxo Git: Injeção do buffer interceptador (Lazy write)
+				fw := &filter.BinaryFilterWriter{
+					Out:     outFile,
+					Header:  headerBuf.Bytes(),
+					Quiet:   opts.Quiet,
+					RelPath: relPath,
+				}
+
+				err := writeContent(path, opts.GitCommit, fw, br)
+				fw.Flush() // Gatilho obrigatório para arquivos menores que a tolerância de 512 bytes
+
+				if err != nil && !fw.IsBinary {
+					if !fw.Determined {
+						outFile.Write(headerBuf.Bytes())
+					}
+					fmt.Fprintf(outFile, "\n[Erro de I/O na extração Git: %v]\n", err)
+					if !opts.Quiet {
+						fmt.Printf("Aviso: Falha estrutural ao extrair o path Git '%s': %v\n", relPath, err)
+					}
+				} else if !fw.IsBinary {
+					fmt.Fprintln(outFile, "")
+					if !opts.Quiet {
+						fmt.Printf("  -> Anexado: %s\n", relPath)
 					}
 				}
 			}
-		} else {
-			if opts.Quiet {
-				skip = true
-			} else {
-				fmt.Printf("\n[?] O arquivo '%s' não possui extensão.\n", relPath)
-				fmt.Printf("Deseja incluir seu conteúdo nesta exportação? [s/N]: ")
-				response, _ := reader.ReadString('\n')
-				response = strings.TrimSpace(strings.ToLower(response))
-				skip = !(response == "s" || response == "y")
-			}
-		}
-
-		if skip {
-			if !opts.Quiet {
-				fmt.Printf("  -> Omitido: %s\n", relPath)
-			}
-			continue
-		}
-
-		err := writeContent(path, opts.GitCommit, outFile, br)
-		if err != nil {
-			fmt.Fprintf(outFile, "[Erro de I/O ao ler conteúdo deste arquivo: %v]\n", err)
-			if !opts.Quiet {
-				fmt.Printf("Aviso: Falha ao ler '%s': %v\n", relPath, err)
-			}
-		} else {
-			fmt.Fprintln(outFile, "")
-		}
-
-		if !opts.Quiet {
-			fmt.Printf("  -> Anexado: %s\n", relPath)
 		}
 	}
 

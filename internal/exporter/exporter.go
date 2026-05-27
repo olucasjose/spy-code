@@ -18,12 +18,13 @@ import (
 
 // ExportOptions define o comportamento declarativo do pipeline de exportação
 type ExportOptions struct {
-	DestDir    string
-	BasePrefix string
-	FlattenMap map[string]string
-	Quiet      bool
-	GitCommit  string // Se preenchido, o pipeline lê do histórico do Git em vez do disco rígido
-	AppendTxt  bool   // Adiciona a extensão .txt nos caminhos de saída
+	DestDir     string
+	BasePrefix  string
+	FlattenMap  map[string]string
+	Quiet       bool
+	GitCommit   string // Se preenchido, o pipeline lê do histórico do Git em vez do disco rígido
+	AppendTxt   bool   // Adiciona a extensão .txt nos caminhos de saída
+	Interactive bool   // Ativa o modelo legado de questionamento JSON para tratamento de binários
 }
 
 func resolveRelPath(path, basePrefix string, flattenMap map[string]string) string {
@@ -60,7 +61,6 @@ func ExportZip(chunks []grouper.ExportChunk, workers int, opts ExportOptions) {
 	var wg sync.WaitGroup
 	var logWg sync.WaitGroup
 
-	// Goroutine dedicada para I/O no terminal (Fan-In)
 	logWg.Add(1)
 	go func() {
 		defer logWg.Done()
@@ -118,9 +118,9 @@ func ExportZip(chunks []grouper.ExportChunk, workers int, opts ExportOptions) {
 		jobs <- c
 	}
 	close(jobs)
-	wg.Wait()      // Aguarda todos os workers finalizarem a compressão
-	close(logChan) // Sinaliza à goroutine de log que não haverá mais envios
-	logWg.Wait()   // Aguarda o flush final no terminal
+	wg.Wait()
+	close(logChan)
+	logWg.Wait()
 }
 
 func buildZip(zipPath string, files []string, opts ExportOptions, br *vcs.BatchReader) error {
@@ -177,7 +177,6 @@ func ExportStandard(files []string, workers int, opts ExportOptions) {
 	var wg sync.WaitGroup
 	var logWg sync.WaitGroup
 
-	// Goroutine dedicada para I/O no terminal (Fan-In)
 	logWg.Add(1)
 	go func() {
 		defer logWg.Done()
@@ -248,7 +247,7 @@ func ExportStandard(files []string, workers int, opts ExportOptions) {
 		jobs <- f
 	}
 	close(jobs)
-	wg.Wait()      // Aguarda todos os workers concluírem a cópia
-	close(logChan) // Sinaliza encerramento de logs
-	logWg.Wait()   // Aguarda impressão das mensagens finais
+	wg.Wait()
+	close(logChan)
+	logWg.Wait()
 }
