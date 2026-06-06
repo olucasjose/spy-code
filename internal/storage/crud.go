@@ -120,6 +120,21 @@ func GetFilesByTag(tagName string) ([]string, error) {
 	return files, rows.Err()
 }
 
+// CountTrackedFiles retorna a quantidade de arquivos monitorados pela tag de forma otimizada.
+func CountTrackedFiles(tagName string) (int, error) {
+	db, err := GetDB()
+	if err != nil {
+		return 0, err
+	}
+
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM files_tracked WHERE tag_name = ?", tagName).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // GetAllTagsWithMeta recupera o dicionário completo de tags e seus metadados para varreduras de listagem.
 func GetAllTagsWithMeta() (map[string]TagMeta, error) {
 	db, err := GetDB()

@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var createGit bool
+var createGlobal bool
 
 var createCmd = &cobra.Command{
 	Use:   "create <nome1> [nome2...]",
@@ -27,16 +27,17 @@ var createCmd = &cobra.Command{
 		}
 
 		var repoID, repoName string
-		if createGit {
+		isGit := !createGlobal
+		if isGit {
 			if !vcs.IsInsideRepo() {
-				return fmt.Errorf("a flag --git exige que o comando seja executado dentro de um repositório Git")
+				return fmt.Errorf("o escopo padrão de tags exige um repositório Git. Use --global (-g) para criar uma tag global")
 			}
 			repoID = vcs.GetRepoID()
 			repoName = vcs.GetRepoName()
 		}
 
 		meta := storage.TagMeta{Type: storage.TagTypeLocal}
-		if createGit {
+		if isGit {
 			meta = storage.TagMeta{
 				Type:     storage.TagTypeGit,
 				RepoID:   repoID,
@@ -49,16 +50,16 @@ var createCmd = &cobra.Command{
 			return fmt.Errorf("erro na transação: %w", err)
 		}
 
-		if createGit {
+		if isGit {
 			fmt.Printf("Tag(s) Git criada(s) com sucesso e atreladas ao repositório [%s]: %v\n", repoName, args)
 		} else {
-			fmt.Printf("Tag(s) Local(is) criada(s) com sucesso: %v\n", args)
+			fmt.Printf("Tag(s) Global(is) criada(s) com sucesso: %v\n", args)
 		}
 		return nil
 	},
 }
 
 func init() {
-	createCmd.Flags().BoolVarP(&createGit, "git", "g", false, "Cria a tag com escopo amarrado ao repositório Git atual")
+	createCmd.Flags().BoolVarP(&createGlobal, "global", "g", false, "Cria a tag com escopo global, em vez de atrelar ao repositório Git atual")
 	rootCmd.AddCommand(createCmd)
 }

@@ -13,10 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	convertToGit bool
-	convertToTae bool
-)
+var convertToGlobal bool
 
 var convertCmd = &cobra.Command{
 	Use:   "convert <nome da tag>",
@@ -30,10 +27,7 @@ var convertCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if convertToGit == convertToTae {
-			return fmt.Errorf("use --git (-g) OU --tae (-t) para definir o destino da conversão")
-		}
-
+		convertToGit := !convertToGlobal
 		tagName := args[0]
 
 		allTags, err := storage.GetAllTagsWithMeta()
@@ -90,7 +84,7 @@ var convertCmd = &cobra.Command{
 
 		} else {
 			if meta.Type == storage.TagTypeLocal {
-				return fmt.Errorf("a tag '%s' já é Local", tagName)
+				return fmt.Errorf("a tag '%s' já é Global", tagName)
 			}
 			if !vcs.IsInsideRepo() || vcs.GetRepoID() != meta.RepoID {
 				return fmt.Errorf("você precisa estar dentro do repositório Git original (%s) para reverter esta tag", meta.RepoID)
@@ -120,14 +114,13 @@ var convertCmd = &cobra.Command{
 		if convertToGit {
 			fmt.Printf("Sucesso: A tag '%s' foi convertida para escopo Git.\n", tagName)
 		} else {
-			fmt.Printf("Sucesso: A tag '%s' foi convertida para escopo Local (Tae).\n", tagName)
+			fmt.Printf("Sucesso: A tag '%s' foi convertida para escopo Global.\n", tagName)
 		}
 		return nil
 	},
 }
 
 func init() {
-	convertCmd.Flags().BoolVarP(&convertToGit, "git", "g", false, "Converte uma tag Local para Git")
-	convertCmd.Flags().BoolVarP(&convertToTae, "tae", "t", false, "Converte uma tag Git para Local (Tae)")
+	convertCmd.Flags().BoolVarP(&convertToGlobal, "global", "g", false, "Converte uma tag Git para escopo Global")
 	rootCmd.AddCommand(convertCmd)
 }

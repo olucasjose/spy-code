@@ -66,7 +66,12 @@ func UntrackPath(tagName, targetPath string) error {
 		return err
 	}
 
-	res, err := db.Exec("DELETE FROM files_tracked WHERE tag_name = ? AND path = ?", tagName, targetPath)
+	legacyPath := targetPath
+	if targetPath == "." {
+		legacyPath = ""
+	}
+
+	res, err := db.Exec("DELETE FROM files_tracked WHERE tag_name = ? AND (path = ? OR path = ?)", tagName, targetPath, legacyPath)
 	if err != nil {
 		return err
 	}

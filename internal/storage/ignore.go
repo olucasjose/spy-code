@@ -110,3 +110,18 @@ func UnignorePaths(tagName string, targets []string) error {
 
 	return tx.Commit()
 }
+
+// CountIgnoredFiles retorna a quantidade de arquivos na denylist da tag de forma otimizada.
+func CountIgnoredFiles(tagName string) (int, error) {
+	db, err := GetDB()
+	if err != nil {
+		return 0, err
+	}
+
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM files_ignored WHERE tag_name = ?", tagName).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}

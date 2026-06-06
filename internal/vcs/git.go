@@ -154,6 +154,10 @@ func GetRelativePath(target string) (string, error) {
 	relPath := strings.TrimPrefix(absTarget, gitRoot)
 	relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
 
+	if relPath == "" {
+		return ".", nil
+	}
+
 	return filepath.ToSlash(relPath), nil
 }
 

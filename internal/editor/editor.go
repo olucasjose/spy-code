@@ -26,12 +26,20 @@ func BuildDraft(files, ignored []string) []byte {
 
 	buf.WriteString(MarkerTracked + "\n")
 	for _, f := range files {
-		buf.WriteString(f + "\n")
+		if f == "" {
+			buf.WriteString(".\n")
+		} else {
+			buf.WriteString(f + "\n")
+		}
 	}
 
 	buf.WriteString("\n" + MarkerIgnored + "\n")
 	for _, i := range ignored {
-		buf.WriteString(i + "\n")
+		if i == "" {
+			buf.WriteString(".\n")
+		} else {
+			buf.WriteString(i + "\n")
+		}
 	}
 
 	return buf.Bytes()
