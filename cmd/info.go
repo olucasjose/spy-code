@@ -7,15 +7,17 @@ import (
 	"errors"
 	"fmt"
 
+	"tae/internal/fs"
 	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	infoGitRoot       bool
-	infoCountItems    bool
-	infoCountDenylist bool
+	infoGitRoot         bool
+	infoCountItems      bool
+	infoCountDenylist   bool
+	infoCountExportable bool
 )
 
 var infoCmd = &cobra.Command{
@@ -40,7 +42,7 @@ var infoCmd = &cobra.Command{
 			return fmt.Errorf("erro ao obter metadados da tag: %w", err)
 		}
 
-		if !infoGitRoot && !infoCountItems && !infoCountDenylist {
+		if !infoGitRoot && !infoCountItems && !infoCountDenylist && !infoCountExportable {
 			trackedCount, err := storage.CountTrackedFiles(tagName)
 			if err != nil {
 				return err
@@ -66,6 +68,12 @@ var infoCmd = &cobra.Command{
 
 			fmt.Printf("Alvos Monitorados: %d\n", trackedCount)
 			fmt.Printf("Alvos Ignorados: %d\n", ignoredCount)
+
+			exportableCount, err := countExportableFiles(tagName, meta)
+			if err == nil {
+				fmt.Printf("Arquivos Exportáveis: %d\n", exportableCount)
+			}
+
 			return nil
 		}
 
@@ -89,13 +97,49 @@ var infoCmd = &cobra.Command{
 			fmt.Println(ignoredCount)
 		}
 
+		if infoCountExportable {
+			exportableCount, err := countExportableFiles(tagName, meta)
+			if err != nil {
+				return err
+			}
+			fmt.Println(exportableCount)
+		}
+
 		return nil
 	},
+}
+
+func countExportableFiles(tagName string, meta storage.TagMeta) (int, error) {
+	files, err := storage.GetFilesByTag(tagName)
+	if err != nil {
+		return 0, err
+	}
+
+	resolvedFiles, err := fs.RestorePathsForDisk(tagName, meta, files)
+	if err != nil {
+		return 0, err
+	}
+
+	ignoredMap, _ := storage.GetIgnoredPaths(tagName)
+	restoredIgnored := make(map[string]bool)
+	var igPaths []string
+	for p := range ignoredMap {
+		igPaths = append(igPaths, p)
+	}
+	if resIgPaths, err := fs.RestorePathsForDisk(tagName, meta, igPaths); err == nil {
+		for _, p := range resIgPaths {
+			restoredIgnored[p] = true
+		}
+	}
+
+	expanded := fs.ExpandPathsToFiles(resolvedFiles, restoredIgnored)
+	return len(expanded), nil
 }
 
 func init() {
 	infoCmd.Flags().BoolVar(&infoGitRoot, "gitroot", false, "Exibe apenas o caminho raiz do repositório Git associado")
 	infoCmd.Flags().BoolVar(&infoCountItems, "count-itens", false, "Exibe apenas a quantidade de itens rastreados")
 	infoCmd.Flags().BoolVar(&infoCountDenylist, "count-denylist", false, "Exibe apenas a quantidade de itens na denylist")
+	infoCmd.Flags().BoolVar(&infoCountExportable, "count-exportable", false, "Exibe apenas a quantidade total de arquivos que serão efetivamente exportados")
 	rootCmd.AddCommand(infoCmd)
 }
