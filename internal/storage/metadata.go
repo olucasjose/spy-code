@@ -5,12 +5,16 @@ package storage
 
 import (
 	"database/sql"
+	"errors"
 )
 
 const (
 	TagTypeLocal = "local"
 	TagTypeGit   = "git"
 )
+
+// ErrTagNotFound é retornado quando a tag solicitada não existe no banco.
+var ErrTagNotFound = errors.New("tag não encontrada")
 
 // TagMeta define a estrutura lógica dos dados da tag na tabela tags
 type TagMeta struct {
@@ -21,7 +25,7 @@ type TagMeta struct {
 }
 
 // GetTagMeta recupera os metadados de uma tag.
-// Retorna fallback local se a tag não existir, mantendo o comportamento prévio.
+// Retorna ErrTagNotFound se a tag não existir.
 func GetTagMeta(tagName string) (TagMeta, error) {
 	db, err := GetDB()
 	if err != nil {
@@ -33,7 +37,7 @@ func GetTagMeta(tagName string) (TagMeta, error) {
 
 	err = db.QueryRow("SELECT type, repo_id, repo_name, git_root FROM tags WHERE name = ?", tagName).Scan(&meta.Type, &repoID, &repoName, &gitRoot)
 	if err == sql.ErrNoRows {
-		return TagMeta{Type: TagTypeLocal}, nil
+		return TagMeta{}, ErrTagNotFound
 	} else if err != nil {
 		return TagMeta{}, err
 	}

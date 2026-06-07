@@ -54,13 +54,18 @@ var pruneCmd = &cobra.Command{
 
 		// Etapa 1: Escaneamento em memória (sem bloquear banco)
 		for _, tagName := range targetTags {
+			meta, err := storage.GetTagMeta(tagName)
+			if err != nil {
+				continue
+			}
+
 			rawFiles, rawIgnored, err := storage.GetTagRawKeys(tagName)
 			if err != nil {
 				continue
 			}
 
-			resolvedFiles, errF := fs.RestorePathsForDisk(tagName, rawFiles)
-			resolvedIgnored, errI := fs.RestorePathsForDisk(tagName, rawIgnored)
+			resolvedFiles, errF := fs.RestorePathsForDisk(tagName, meta, rawFiles)
+			resolvedIgnored, errI := fs.RestorePathsForDisk(tagName, meta, rawIgnored)
 
 			if errF == nil {
 				for i, p := range resolvedFiles {

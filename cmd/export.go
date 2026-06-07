@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,6 +49,14 @@ var exportCmd = &cobra.Command{
 		tagName := args[0]
 		destPath := args[1]
 
+		meta, err := storage.GetTagMeta(tagName)
+		if err != nil {
+			if errors.Is(err, storage.ErrTagNotFound) {
+				return fmt.Errorf("a tag '%s' não existe", tagName)
+			}
+			return fmt.Errorf("erro ao obter metadados da tag: %w", err)
+		}
+
 		rawFiles, err := storage.GetFilesByTag(tagName)
 		if exportSingle && (exportZip || exportFlatten) {
 			return fmt.Errorf("a flag --single-file (-s) é exclusiva e não pode ser usada simultaneamente com --zip ou --flatten")
@@ -59,7 +68,7 @@ var exportCmd = &cobra.Command{
 			return fmt.Errorf("a tag '%s' não possui alvos rastreados ou não existe", tagName)
 		}
 
-		resolvedFiles, err := fs.RestorePathsForDisk(tagName, rawFiles)
+		resolvedFiles, err := fs.RestorePathsForDisk(tagName, meta, rawFiles)
 		if err != nil {
 			return fmt.Errorf("erro de escopo estrutural: %w", err)
 		}
@@ -74,7 +83,7 @@ var exportCmd = &cobra.Command{
 		for p := range ignoredMap {
 			igPaths = append(igPaths, p)
 		}
-		if resIgPaths, err := fs.RestorePathsForDisk(tagName, igPaths); err == nil {
+		if resIgPaths, err := fs.RestorePathsForDisk(tagName, meta, igPaths); err == nil {
 			for _, p := range resIgPaths {
 				restoredIgnored[p] = true
 			}

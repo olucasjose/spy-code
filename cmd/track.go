@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -53,7 +54,16 @@ var trackCmd = &cobra.Command{
 			return nil
 		}
 
-		resolvedTargets, err := fs.ResolveTagPaths(tagName, validTargets)
+		meta, err := storage.GetTagMeta(tagName)
+		if err != nil {
+			if errors.Is(err, storage.ErrTagNotFound) {
+				meta = storage.TagMeta{Type: storage.TagTypeLocal}
+			} else {
+				return fmt.Errorf("erro ao obter metadados da tag: %w", err)
+			}
+		}
+
+		resolvedTargets, err := fs.ResolveTagPaths(tagName, meta, validTargets)
 		if err != nil {
 			return fmt.Errorf("erro de resolução: %w", err)
 		}

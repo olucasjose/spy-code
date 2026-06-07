@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"tae/internal/fs"
@@ -26,7 +27,16 @@ var ignoreCmd = &cobra.Command{
 		tagName := args[len(args)-1]
 		targets := args[:len(args)-1]
 
-		resolvedTargets, err := fs.ResolveTagPaths(tagName, targets)
+		meta, err := storage.GetTagMeta(tagName)
+		if err != nil {
+			if errors.Is(err, storage.ErrTagNotFound) {
+				meta = storage.TagMeta{Type: storage.TagTypeLocal}
+			} else {
+				return fmt.Errorf("erro ao obter metadados da tag: %w", err)
+			}
+		}
+
+		resolvedTargets, err := fs.ResolveTagPaths(tagName, meta, targets)
 		if err != nil {
 			return fmt.Errorf("erro de resolução: %w", err)
 		}

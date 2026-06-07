@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"tae/internal/fs"
@@ -24,7 +25,15 @@ var untrackCmd = &cobra.Command{
 		tagName := args[len(args)-1]
 		targets := args[:len(args)-1]
 
-		resolvedTargets, err := fs.ResolveTagPaths(tagName, targets)
+		meta, err := storage.GetTagMeta(tagName)
+		if err != nil {
+			if errors.Is(err, storage.ErrTagNotFound) {
+				return fmt.Errorf("a tag '%s' não existe", tagName)
+			}
+			return fmt.Errorf("erro ao obter metadados da tag: %w", err)
+		}
+
+		resolvedTargets, err := fs.ResolveTagPaths(tagName, meta, targets)
 		if err != nil {
 			return fmt.Errorf("erro de resolução: %w", err)
 		}

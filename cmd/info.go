@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"tae/internal/storage"
@@ -33,6 +34,9 @@ var infoCmd = &cobra.Command{
 
 		meta, err := storage.GetTagMeta(tagName)
 		if err != nil {
+			if errors.Is(err, storage.ErrTagNotFound) {
+				return fmt.Errorf("a tag '%s' não existe", tagName)
+			}
 			return fmt.Errorf("erro ao obter metadados da tag: %w", err)
 		}
 
@@ -59,9 +63,9 @@ var infoCmd = &cobra.Command{
 			} else {
 				fmt.Printf("Tipo: Local\n")
 			}
-			
-			fmt.Printf("Itens Monitorados: %d\n", trackedCount)
-			fmt.Printf("Itens na Denylist: %d\n", ignoredCount)
+
+			fmt.Printf("Alvos Monitorados: %d\n", trackedCount)
+			fmt.Printf("Alvos Ignorados: %d\n", ignoredCount)
 			return nil
 		}
 

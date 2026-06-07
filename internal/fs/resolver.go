@@ -13,12 +13,7 @@ import (
 )
 
 // ResolveTagPaths consulta o metadado da tag e resolve os caminhos com base no escopo
-func ResolveTagPaths(tagName string, targets []string) ([]string, error) {
-	meta, err := storage.GetTagMeta(tagName)
-	if err != nil {
-		return nil, err
-	}
-
+func ResolveTagPaths(tagName string, meta storage.TagMeta, targets []string) ([]string, error) {
 	var resolved []string
 	if meta.Type == storage.TagTypeGit {
 		if !vcs.IsInsideRepo() {
@@ -53,12 +48,7 @@ func ResolveTagPaths(tagName string, targets []string) ([]string, error) {
 }
 
 // RestorePathsForDisk converte caminhos lidos do banco em caminhos absolutos testáveis no disco físico.
-func RestorePathsForDisk(tagName string, paths []string) ([]string, error) {
-	meta, err := storage.GetTagMeta(tagName)
-	if err != nil {
-		return nil, err
-	}
-
+func RestorePathsForDisk(tagName string, meta storage.TagMeta, paths []string) ([]string, error) {
 	if meta.Type == storage.TagTypeGit {
 		gitRoot := meta.GitRoot
 

@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -148,6 +149,14 @@ var listCmd = &cobra.Command{
 
 		tagName := args[0]
 
+		meta, err := storage.GetTagMeta(tagName)
+		if err != nil {
+			if errors.Is(err, storage.ErrTagNotFound) {
+				return fmt.Errorf("a tag '%s' não existe", tagName)
+			}
+			return fmt.Errorf("erro ao obter metadados da tag: %w", err)
+		}
+
 		if listIgnored {
 			ignoredMap, err := storage.GetIgnoredPaths(tagName)
 			if err != nil {
@@ -176,7 +185,7 @@ var listCmd = &cobra.Command{
 			return nil
 		}
 
-		resolvedFiles, err := fs.RestorePathsForDisk(tagName, files)
+		resolvedFiles, err := fs.RestorePathsForDisk(tagName, meta, files)
 		if err != nil {
 			return fmt.Errorf("erro de escopo estrutural: %w", err)
 		}
@@ -190,7 +199,7 @@ var listCmd = &cobra.Command{
 			for p := range ignoredMap {
 				igPaths = append(igPaths, p)
 			}
-			if resIgPaths, err := fs.RestorePathsForDisk(tagName, igPaths); err == nil {
+			if resIgPaths, err := fs.RestorePathsForDisk(tagName, meta, igPaths); err == nil {
 				for _, p := range resIgPaths {
 					restoredIgnored[p] = true
 				}
