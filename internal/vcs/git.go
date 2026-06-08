@@ -196,3 +196,30 @@ func ListTree(commit string) ([]string, error) {
 
 	return files, nil
 }
+
+// GetTargetType determina se o alvo é uma Branch, Tag ou apenas um Commit
+func GetTargetType(target string) string {
+	if err := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/heads/"+target).Run(); err == nil {
+		return "Branch"
+	}
+	if err := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/tags/"+target).Run(); err == nil {
+		return "Tag"
+	}
+	return "Commit"
+}
+
+// GetCommitInfo retorna o Hash completo e o Assunto (Subject) de um alvo
+func GetCommitInfo(target string) (hash string, subject string, err error) {
+	cmd := exec.Command("git", "log", "-1", "--format=%H%n%s", target)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", "", fmt.Errorf("alvo '%s' inválido ou não encontrado", target)
+	}
+
+	lines := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)
+	if len(lines) < 2 {
+		return lines[0], "", nil // Pode ser que a mensagem seja vazia, então retornamos só o hash
+	}
+
+	return lines[0], lines[1], nil
+}
