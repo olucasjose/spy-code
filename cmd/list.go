@@ -34,7 +34,7 @@ var (
 
 var listCmd = &cobra.Command{
 	Use:   "list [nome da tag]",
-	Short: "Lista todas as tags ou os arquivos rastreados de uma tag específica",
+	Short: "Lista todas as tags ou os arquivos rastreados em um alvo específico",
 	Args:  cobra.MaximumNArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
@@ -164,11 +164,11 @@ var listCmd = &cobra.Command{
 			}
 
 			if len(ignoredMap) == 0 {
-				fmt.Printf("A denylist da tag '%s' está vazia.\n", tagName)
+				fmt.Printf("A denylist em '%s' está vazia.\n", tagName)
 				return nil
 			}
 
-			fmt.Printf("Exclusion Index (Denylist) da tag '%s':\n", tagName)
+			fmt.Printf("Exclusion Index (Denylist) em '%s':\n", tagName)
 			for path := range ignoredMap {
 				fmt.Printf("  - %s\n", path)
 			}
@@ -181,7 +181,7 @@ var listCmd = &cobra.Command{
 		}
 
 		if len(files) == 0 {
-			fmt.Printf("Alvos rastreados na tag '%s':\n  (Vazio ou tag não inicializada)\n", tagName)
+			fmt.Printf("Alvos rastreados em '%s':\n  (Vazio ou não inicializado)\n", tagName)
 			return nil
 		}
 
@@ -208,7 +208,7 @@ var listCmd = &cobra.Command{
 			files = fs.ExpandPathsToFiles(files, restoredIgnored)
 		}
 
-		fmt.Printf("Alvos rastreados na tag '%s':\n", tagName)
+		fmt.Printf("Alvos rastreados em '%s':\n", tagName)
 
 		if listAbsolute {
 			for _, f := range files {

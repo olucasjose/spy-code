@@ -16,7 +16,7 @@ import (
 var (
 	gitInfoType            bool
 	gitInfoHash            bool
-	gitInfoCountDenylist   bool
+	gitInfoCountIgnored    bool
 	gitInfoCountExportable bool
 	gitInfoCountTotal      bool
 )
@@ -35,33 +35,26 @@ var gitInfoCmd = &cobra.Command{
 
 		targetType := vcs.GetTargetType(target)
 
-		if !gitInfoType && !gitInfoHash && !gitInfoCountDenylist && !gitInfoCountExportable && !gitInfoCountTotal {
-			// Buscar quantidade de arquivos na tree original do Git
+		if !gitInfoType && !gitInfoHash && !gitInfoCountIgnored && !gitInfoCountExportable && !gitInfoCountTotal {
 			rawFiles, err := vcs.ListTree(target)
 			if err != nil {
 				return fmt.Errorf("erro ao ler árvore do Git para o alvo %s: %w", target, err)
 			}
 
-			// Buscar regras de exclusão (denylist) do repositório
 			repoID := vcs.GetRepoID()
 			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
 			if err != nil {
 				ignoredMap = make(map[string]bool)
 			}
 
-			// Filtrar arquivos
-			var exportableCount int
-			for _, f := range rawFiles {
-				if !filter.IsPathIgnoredByMap(f, ignoredMap) {
-					exportableCount++
-				}
-			}
+			activeTargets, ignoredFilesCount := filter.GetActiveIgnoredTargets(rawFiles, ignoredMap)
+			exportableCount := len(rawFiles) - ignoredFilesCount
 
 			fmt.Printf("Nome: %s\n", target)
 			fmt.Printf("Tipo: %s\n", targetType)
 			fmt.Printf("Hash: %s\n", hash)
 			fmt.Printf("Total na Tree: %d\n", len(rawFiles))
-			fmt.Printf("Alvos Ignorados: %d\n", len(ignoredMap))
+			fmt.Printf("Alvos Ignorados: %d\n", len(activeTargets))
 			fmt.Printf("Arquivos Exportáveis: %d\n", exportableCount)
 
 			return nil
@@ -75,35 +68,31 @@ var gitInfoCmd = &cobra.Command{
 			fmt.Println(hash)
 		}
 
-		if gitInfoCountDenylist || gitInfoCountExportable || gitInfoCountTotal {
-			repoID := vcs.GetRepoID()
-			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
+		if gitInfoCountIgnored || gitInfoCountTotal || gitInfoCountExportable {
+			rawFiles, err := vcs.ListTree(target)
 			if err != nil {
-				ignoredMap = make(map[string]bool)
+				return fmt.Errorf("erro ao ler árvore do Git para o alvo %s: %w", target, err)
 			}
 
-			if gitInfoCountDenylist {
-				fmt.Println(len(ignoredMap))
+			if gitInfoCountTotal {
+				fmt.Println(len(rawFiles))
 			}
 
-			if gitInfoCountTotal || gitInfoCountExportable {
-				rawFiles, err := vcs.ListTree(target)
+			if gitInfoCountIgnored || gitInfoCountExportable {
+				repoID := vcs.GetRepoID()
+				ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
 				if err != nil {
-					return fmt.Errorf("erro ao ler árvore do Git para o alvo %s: %w", target, err)
+					ignoredMap = make(map[string]bool)
 				}
 
-				if gitInfoCountTotal {
-					fmt.Println(len(rawFiles))
+				activeTargets, ignoredFilesCount := filter.GetActiveIgnoredTargets(rawFiles, ignoredMap)
+
+				if gitInfoCountIgnored {
+					fmt.Println(len(activeTargets))
 				}
 
 				if gitInfoCountExportable {
-					var exportableCount int
-					for _, f := range rawFiles {
-						if !filter.IsPathIgnoredByMap(f, ignoredMap) {
-							exportableCount++
-						}
-					}
-					fmt.Println(exportableCount)
+					fmt.Println(len(rawFiles) - ignoredFilesCount)
 				}
 			}
 		}
@@ -115,7 +104,7 @@ var gitInfoCmd = &cobra.Command{
 func init() {
 	gitInfoCmd.Flags().BoolVar(&gitInfoType, "type", false, "Exibe apenas o tipo do alvo (Commit, Tag, Branch)")
 	gitInfoCmd.Flags().BoolVar(&gitInfoHash, "hash", false, "Exibe apenas o hash completo associado ao alvo")
-	gitInfoCmd.Flags().BoolVar(&gitInfoCountDenylist, "count-denylist", false, "Exibe apenas a quantidade de alvos na denylist")
+	gitInfoCmd.Flags().BoolVar(&gitInfoCountIgnored, "count-ignored", false, "Exibe apenas a quantidade de alvos que incidiram no alvo")
 	gitInfoCmd.Flags().BoolVar(&gitInfoCountExportable, "count-exportable", false, "Exibe apenas a quantidade de arquivos que serão efetivamente exportados")
 	gitInfoCmd.Flags().BoolVar(&gitInfoCountTotal, "count-total", false, "Exibe apenas a quantidade total de arquivos na árvore do Git")
 	gitCmd.AddCommand(gitInfoCmd)

@@ -24,10 +24,10 @@ func MatchPattern(target string, patterns []string) bool {
 	return false
 }
 
-// IsPathIgnoredByMap verifica se o caminho exato ou seus diretórios pai estão no mapa de exclusão
-func IsPathIgnoredByMap(target string, ignoredMap map[string]bool) bool {
+// GetIgnoredRule retorna a regra exata (do mapa de exclusão) que bloqueou o caminho alvo. Se não houver, retorna string vazia.
+func GetIgnoredRule(target string, ignoredMap map[string]bool) string {
 	if ignoredMap[target] {
-		return true
+		return target
 	}
 	parts := strings.Split(target, "/")
 	current := ""
@@ -38,8 +38,29 @@ func IsPathIgnoredByMap(target string, ignoredMap map[string]bool) bool {
 			current = current + "/" + parts[i]
 		}
 		if ignoredMap[current] {
-			return true
+			return current
 		}
 	}
-	return false
+	return ""
+}
+
+// IsPathIgnoredByMap verifica se o caminho exato ou seus diretórios pai estão no mapa de exclusão
+func IsPathIgnoredByMap(target string, ignoredMap map[string]bool) bool {
+	return GetIgnoredRule(target, ignoredMap) != ""
+}
+
+// GetActiveIgnoredTargets processa todos os arquivos, retorna o mapa apenas com as regras que incidiram neles e o total de arquivos bloqueados.
+func GetActiveIgnoredTargets(files []string, ignoredMap map[string]bool) (map[string]bool, int) {
+	activeTargets := make(map[string]bool)
+	ignoredFilesCount := 0
+
+	for _, f := range files {
+		rule := GetIgnoredRule(f, ignoredMap)
+		if rule != "" {
+			activeTargets[rule] = true
+			ignoredFilesCount++
+		}
+	}
+
+	return activeTargets, ignoredFilesCount
 }

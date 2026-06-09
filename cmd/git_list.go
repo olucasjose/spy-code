@@ -25,8 +25,8 @@ var (
 )
 
 var gitListCmd = &cobra.Command{
-	Use:   "list [commit]",
-	Short: "Lista arquivos de um commit ou a denylist do repositório atual",
+	Use:   "list [target]",
+	Short: "Lista arquivos de um alvo Git ou a denylist do repositório",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if gitListIgnored {
@@ -41,6 +41,27 @@ var gitListCmd = &cobra.Command{
 				return nil
 			}
 
+			if len(args) > 0 {
+				commit := args[0]
+				rawFiles, err := vcs.ListTree(commit)
+				if err != nil {
+					return err
+				}
+
+				activeTargets, _ := filter.GetActiveIgnoredTargets(rawFiles, ignoredMap)
+
+				if len(activeTargets) == 0 {
+					fmt.Printf("Nenhum alvo da denylist incide sobre '%s'.\n", commit)
+					return nil
+				}
+
+				fmt.Printf("Exclusion Index (Denylist) retido em '%s':\n", commit)
+				for path := range activeTargets {
+					fmt.Printf("  - %s\n", path)
+				}
+				return nil
+			}
+
 			fmt.Println("Exclusion Index (Denylist) do repositório atual:")
 			for path := range ignoredMap {
 				fmt.Printf("  - %s\n", path)
@@ -49,7 +70,7 @@ var gitListCmd = &cobra.Command{
 		}
 
 		if len(args) == 0 {
-			return fmt.Errorf("informe um <commit> para listar ou use a flag --ignored (-i) para ver a denylist")
+			return fmt.Errorf("informe um <alvo> para listar ou use a flag --ignored (-i) para ver a denylist")
 		}
 
 		commit := args[0]
@@ -59,7 +80,7 @@ var gitListCmd = &cobra.Command{
 		}
 
 		if len(rawFiles) == 0 {
-			fmt.Println("Nenhum arquivo encontrado neste commit.")
+			fmt.Printf("Nenhum arquivo encontrado em '%s'.\n", commit)
 			return nil
 		}
 
@@ -81,7 +102,7 @@ var gitListCmd = &cobra.Command{
 		}
 
 		if len(files) == 0 {
-			fmt.Println("Todos os arquivos deste commit foram retidos pela denylist.")
+			fmt.Printf("Todos os arquivos em '%s' foram retidos pela denylist.\n", commit)
 			return nil
 		}
 
