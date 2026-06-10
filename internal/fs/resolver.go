@@ -115,3 +115,21 @@ func ExpandPathsToFiles(paths []string, ignored map[string]bool) []string {
 	}
 	return expanded
 }
+
+// ValidateGitRoot verifica se o diretório raiz do Git cadastrado na tag existe fisicamente.
+// Retorna um erro detalhado caso a raiz não seja encontrada, orientando o uso do root-fix.
+func ValidateGitRoot(meta storage.TagMeta) error {
+	if meta.Type != storage.TagTypeGit {
+		return nil
+	}
+
+	if meta.GitRoot == "" {
+		return fmt.Errorf("Esta tag é de uma versão antiga e não possui a raiz do Git salva. Entre na pasta do repositório correspondente e execute 'tae git root-fix' para atualizá-la.")
+	}
+
+	if _, err := os.Stat(meta.GitRoot); err != nil {
+		return fmt.Errorf("O diretório Git Root '%s' não foi encontrado. Se o projeto foi movido, entre na nova pasta e use: tae git root-fix", meta.GitRoot)
+	}
+
+	return nil
+}

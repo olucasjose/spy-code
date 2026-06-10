@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	TagTypeLocal = "local"
-	TagTypeGit   = "git"
+	TagTypeGlobal = "global"
+	TagTypeGit    = "git"
 )
 
 // ErrTagNotFound é retornado quando a tag solicitada não existe no banco.

@@ -89,7 +89,7 @@ func RemoveKeysFromTag(tagName string, filesToRemove, ignoredToRemove []string) 
 	return tx.Commit()
 }
 
-// UpdateTagScope reescreve os caminhos de uma tag resolvendo a troca de contexto (Local <-> Git).
+// UpdateTagScope reescreve os caminhos de uma tag resolvendo a troca de contexto (Global <-> Git).
 func UpdateTagScope(tagName string, meta TagMeta, swapFiles, swapIgnored map[string]string) error {
 	db, err := GetDB()
 	if err != nil {
@@ -228,4 +228,19 @@ func ReplaceTagState(tagName string, newFiles, newIgnored []string) error {
 	}
 
 	return nil
+}
+
+// UpdateGitRootForRepo atualiza o git_root e repo_name de todas as tags associadas a um repositório específico.
+func UpdateGitRootForRepo(repoID string, newGitRoot string, newRepoName string) (int64, error) {
+	db, err := GetDB()
+	if err != nil {
+		return 0, err
+	}
+
+	res, err := db.Exec("UPDATE tags SET git_root = ?, repo_name = ? WHERE repo_id = ? AND type = 'git'", newGitRoot, newRepoName, repoID)
+	if err != nil {
+		return 0, fmt.Errorf("erro ao atualizar git root: %w", err)
+	}
+
+	return res.RowsAffected()
 }

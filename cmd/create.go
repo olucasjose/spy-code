@@ -36,7 +36,7 @@ var createCmd = &cobra.Command{
 			repoName = vcs.GetRepoName()
 		}
 
-		meta := storage.TagMeta{Type: storage.TagTypeLocal}
+		meta := storage.TagMeta{Type: storage.TagTypeGlobal}
 		if isGit {
 			meta = storage.TagMeta{
 				Type:     storage.TagTypeGit,

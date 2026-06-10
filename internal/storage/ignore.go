@@ -25,7 +25,7 @@ func IgnorePaths(tagName string, targets []string) error {
 	var exists int
 	err = tx.QueryRow("SELECT 1 FROM tags WHERE name = ?", tagName).Scan(&exists)
 	if err == sql.ErrNoRows {
-		_, err = tx.Exec("INSERT INTO tags (name, type) VALUES (?, ?)", tagName, TagTypeLocal)
+		_, err = tx.Exec("INSERT INTO tags (name, type) VALUES (?, ?)", tagName, TagTypeGlobal)
 		if err != nil {
 			return fmt.Errorf("falha ao inicializar tag '%s': %w", tagName, err)
 		}

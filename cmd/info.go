@@ -61,9 +61,12 @@ var infoCmd = &cobra.Command{
 					repoName = meta.RepoID
 				}
 				fmt.Printf("Repositório: %s\n", repoName)
+				if err := fs.ValidateGitRoot(meta); err != nil {
+					fmt.Printf("\n\033[33m[!] AVISO: %v\033[0m\n\n", err)
+				}
 				fmt.Printf("Git Root: %s\n", meta.GitRoot)
 			} else {
-				fmt.Printf("Tipo: Local\n")
+				fmt.Printf("Tipo: Global\n")
 			}
 
 			fmt.Printf("Alvos Monitorados: %d\n", trackedCount)

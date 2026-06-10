@@ -57,6 +57,10 @@ var exportCmd = &cobra.Command{
 			return fmt.Errorf("erro ao obter metadados da tag: %w", err)
 		}
 
+		if err := fs.ValidateGitRoot(meta); err != nil {
+			return fmt.Errorf("não é possível exportar a tag '%s': %v", tagName, err)
+		}
+
 		rawFiles, err := storage.GetFilesByTag(tagName)
 		if exportSingle && (exportZip || exportFlatten) {
 			return fmt.Errorf("a flag --single-file (-s) é exclusiva e não pode ser usada simultaneamente com --zip ou --flatten")

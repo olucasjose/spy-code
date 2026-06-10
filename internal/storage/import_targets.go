@@ -96,7 +96,7 @@ func ImportTargets(oldName, newName string) (int, []string, error) {
 		checkPath := relPath
 		if destType == TagTypeGit && destGitRoot.Valid && destGitRoot.String != "" {
 			checkPath = filepath.Join(destGitRoot.String, relPath)
-		} else if destType == TagTypeLocal {
+		} else if destType == TagTypeGlobal {
 			absPath, err := filepath.Abs(relPath)
 			if err == nil {
 				checkPath = absPath

@@ -75,7 +75,7 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
 | `create <tags>...` | Cria novos contextos (tags) vazios no banco de dados. | `tae create refactor fix` |
 | `rename <old> <new>`| Renomeia uma tag existente e migra seus metadados. | `tae rename fix bugfix` |
 | `delete <tags>...` | Remove uma ou mais tags e todo o seu índice de rastreamento. | `tae delete tag1 tag2` |
-| `convert <tag>` | Converte uma tag entre escopos Local e Git. Use `-g` para Git ou `-t` para Local. | `tae convert minha_tag -g` |
+| `convert <tag>` | Converte uma tag entre escopos Global e Git. Use `-g` para converter para Global. | `tae convert minha_tag -g` |
 | `list [tag]` | Lista alvos rastreados. Suporta árvore visual (`-t`), profundidade (`-L`), filtro (`-I`), expansão de pastas (`-e`) e dump de exclusões (`-i` / `--ignored`). | `tae list refactor -t -e` |
 | `track <alvos> <tag>` | Adiciona arquivos/pastas ao monitoramento explícito da tag. | `tae track ./cmd/ meu_app` |
 | `untrack <alvos> <tag>`| Remove arquivos/pastas específicos do monitoramento explícito. | `tae untrack ./cmd/ meu_app` |
@@ -114,10 +114,10 @@ Os comandos de backup permitem exportar e importar metadados de tags associadas 
 
 ### Conversão de Escopo (`convert`)
 
-O comando `convert` permite migrar uma tag entre os escopos **Local** (padrão, baseado em caminhos absolutos) e **Git** (baseado em caminhos relativos ao repositório).
+O comando `convert` permite migrar uma tag entre os escopos **Global** (baseado em caminhos absolutos) e **Git** (padrão atual, baseado em caminhos relativos ao repositório).
 
-- **Local → Git (`-g`):** Requer estar dentro de um repositório Git. Caminhos absolutos são convertidos para relativos.
-- **Git → Local (`-t`):** Requer estar dentro do repositório Git original. Caminhos relativos são expandidos para absolutos.
+- **Global → Git:** Requer estar dentro de um repositório Git. Caminhos absolutos são convertidos para relativos. Executado por padrão ao rodar `tae convert <tag>`.
+- **Git → Global (`-g`):** Requer estar dentro do repositório Git original. Caminhos relativos são expandidos para absolutos.
 
 ## 📄 Licença
 

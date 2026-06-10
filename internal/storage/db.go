@@ -116,6 +116,13 @@ func createSchema(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("falha ao criar tabelas internas: %w", err)
 	}
+
+	// TODO: Remover esta linha futuramente após todos os dispositivos sincronizarem a mudança estrutural de "local" para "global"
+	_, err = db.Exec("UPDATE tags SET type = 'global' WHERE type = 'local'")
+	if err != nil {
+		return fmt.Errorf("falha ao migrar tipos de tag antigos: %w", err)
+	}
+
 	return nil
 }
 

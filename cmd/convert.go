@@ -17,7 +17,7 @@ var convertToGlobal bool
 
 var convertCmd = &cobra.Command{
 	Use:   "convert <nome da tag>",
-	Short: "Converte uma tag entre os escopos Local e Git",
+	Short: "Converte uma tag entre os escopos Global e Git",
 	Args:  cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -83,7 +83,7 @@ var convertCmd = &cobra.Command{
 			meta.GitRoot = vcs.GetRoot()
 
 		} else {
-			if meta.Type == storage.TagTypeLocal {
+			if meta.Type == storage.TagTypeGlobal {
 				return fmt.Errorf("a tag '%s' já é Global", tagName)
 			}
 			if !vcs.IsInsideRepo() || vcs.GetRepoID() != meta.RepoID {
@@ -101,7 +101,7 @@ var convertCmd = &cobra.Command{
 				swapIgnored[k] = absPath
 			}
 
-			meta.Type = storage.TagTypeLocal
+			meta.Type = storage.TagTypeGlobal
 			meta.RepoID = ""
 			meta.RepoName = ""
 			meta.GitRoot = ""

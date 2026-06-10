@@ -30,7 +30,7 @@ var ignoreCmd = &cobra.Command{
 		meta, err := storage.GetTagMeta(tagName)
 		if err != nil {
 			if errors.Is(err, storage.ErrTagNotFound) {
-				meta = storage.TagMeta{Type: storage.TagTypeLocal}
+				meta = storage.TagMeta{Type: storage.TagTypeGlobal}
 			} else {
 				return fmt.Errorf("erro ao obter metadados da tag: %w", err)
 			}

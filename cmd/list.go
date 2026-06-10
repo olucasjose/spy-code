@@ -27,9 +27,11 @@ var (
 	listAbsolute    bool
 	listExpand      bool
 	listIgnored     bool
-	listDetails     bool
-	listGroup       bool
-	listCurrentRepo bool
+	listDetails       bool
+	listGroup         bool
+	listCurrentRepo   bool
+	listGitrootStatus bool
+	listInvalidOnly   bool
 )
 
 var listCmd = &cobra.Command{
@@ -60,6 +62,49 @@ var listCmd = &cobra.Command{
 						delete(tagsMeta, tag)
 					}
 				}
+			}
+
+			if listGitrootStatus {
+				w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+				fmt.Fprintln(w, "TAG\tREPOSITÓRIO\tGIT ROOT\tSTATUS")
+
+				var tagNames []string
+				for t := range tagsMeta {
+					tagNames = append(tagNames, t)
+				}
+				sort.Strings(tagNames)
+
+				for _, tagName := range tagNames {
+					meta := tagsMeta[tagName]
+					status := "N/A"
+					repoName := "-"
+					gitRoot := "-"
+
+					if meta.Type == storage.TagTypeGit {
+						repoName = meta.RepoName
+						if repoName == "" {
+							repoName = meta.RepoID
+						}
+						gitRoot = meta.GitRoot
+						if gitRoot == "" {
+							status = "SEM GITROOT"
+						} else {
+							if _, err := os.Stat(gitRoot); err != nil {
+								status = "INVÁLIDO (Não encontrado)"
+							} else {
+								status = "VÁLIDO"
+							}
+						}
+					}
+
+					if listInvalidOnly && (status == "VÁLIDO" || status == "N/A" || status == "SEM GITROOT") {
+						continue
+					}
+
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", tagName, repoName, gitRoot, status)
+				}
+				w.Flush()
+				return nil
 			}
 
 			if listGroup {
@@ -134,7 +179,7 @@ var listCmd = &cobra.Command{
 						}
 						fmt.Fprintf(w, "%s\tGit\t%s\n", tagName, repoName)
 					} else {
-						fmt.Fprintf(w, "%s\tLocal\t\n", tagName)
+						fmt.Fprintf(w, "%s\tGlobal\t\n", tagName)
 					}
 				} else {
 					fmt.Printf("  - %s\n", tagName)
@@ -183,6 +228,10 @@ var listCmd = &cobra.Command{
 		if len(files) == 0 {
 			fmt.Printf("Alvos rastreados em '%s':\n  (Vazio ou não inicializado)\n", tagName)
 			return nil
+		}
+
+		if err := fs.ValidateGitRoot(meta); err != nil {
+			fmt.Printf("\n\033[33m[!] AVISO: %v\033[0m\n\n", err)
 		}
 
 		resolvedFiles, err := fs.RestorePathsForDisk(tagName, meta, files)
@@ -249,8 +298,10 @@ func init() {
 	listCmd.Flags().BoolVarP(&listAbsolute, "absolute", "A", false, "Exibe os caminhos absolutos originais sem truncar")
 	listCmd.Flags().BoolVarP(&listExpand, "expand", "e", false, "Expande diretórios lendo o disco físico antes de listar")
 	listCmd.Flags().BoolVarP(&listIgnored, "ignored", "i", false, "Exibe apenas os arquivos na denylist permanente da tag")
-	listCmd.Flags().BoolVarP(&listDetails, "details", "d", false, "Exibe os metadados das tags em colunas, indicando se são Local ou Git")
+	listCmd.Flags().BoolVarP(&listDetails, "details", "d", false, "Exibe os metadados das tags em colunas, indicando se são Global ou Git")
 	listCmd.Flags().BoolVarP(&listGroup, "group", "g", false, "Agrupa a exibição de tags por repositório (com suporte a cores)")
 	listCmd.Flags().BoolVarP(&listCurrentRepo, "current-repo", "c", false, "Lista apenas as tags Git atreladas ao repositório atual")
+	listCmd.Flags().BoolVarP(&listGitrootStatus, "gitroot-status", "", false, "Exibe o status de validade da raiz (git root) das tags")
+	listCmd.Flags().BoolVarP(&listInvalidOnly, "invalid-only", "", false, "Filtra e exibe apenas as tags com git roots inválidos (uso com --gitroot-status)")
 	rootCmd.AddCommand(listCmd)
 }

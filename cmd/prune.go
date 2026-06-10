@@ -59,6 +59,12 @@ var pruneCmd = &cobra.Command{
 				continue
 			}
 
+			if err := fs.ValidateGitRoot(meta); err != nil {
+				fmt.Printf("\033[31m[!] Erro na tag '%s': %v\033[0m\n", tagName, err)
+				fmt.Printf("\033[33mIgnorando prune nesta tag para evitar exclusão em massa acidental.\033[0m\n\n")
+				continue
+			}
+
 			rawFiles, rawIgnored, err := storage.GetTagRawKeys(tagName)
 			if err != nil {
 				continue
