@@ -38,7 +38,7 @@ var importTargetsCmd = &cobra.Command{
 		if len(skipped) > 0 {
 			fmt.Printf("\nAviso: Os seguintes alvos não existem no projeto da tag '%s' e não foram importados:\n", newTag)
 			for _, alvo := range skipped {
-				fmt.Printf("  - %s\n", alvo)
+				fmt.Printf("%s\n", alvo)
 			}
 		}
 

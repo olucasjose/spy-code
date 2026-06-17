@@ -57,14 +57,14 @@ var gitListCmd = &cobra.Command{
 
 				fmt.Printf("Exclusion Index (Denylist) retido em '%s':\n", commit)
 				for path := range activeTargets {
-					fmt.Printf("  - %s\n", path)
+					fmt.Printf("%s\n", path)
 				}
 				return nil
 			}
 
 			fmt.Println("Exclusion Index (Denylist) do repositório atual:")
 			for path := range ignoredMap {
-				fmt.Printf("  - %s\n", path)
+				fmt.Printf("%s\n", path)
 			}
 			return nil
 		}
@@ -117,7 +117,7 @@ var gitListCmd = &cobra.Command{
 		} else {
 			for _, f := range files {
 				if !filter.MatchPattern(f, ignorePatterns) {
-					fmt.Printf("  - %s\n", f)
+					fmt.Printf("%s\n", f)
 				}
 			}
 		}

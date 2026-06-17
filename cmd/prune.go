@@ -118,10 +118,10 @@ var pruneCmd = &cobra.Command{
 				if fLen > 0 || iLen > 0 {
 					fmt.Printf("Tag '%s': %d arquivo(s) fantasma(s) detectado(s).\n", tagName, fLen+iLen)
 					for _, k := range ghostsFilesByTag[tagName] {
-						fmt.Printf("  - %s [Rastreado]\n", k)
+						fmt.Printf("%s [Rastreado]\n", k)
 					}
 					for _, k := range ghostsIgnoredByTag[tagName] {
-						fmt.Printf("  - %s [Denylist]\n", k)
+						fmt.Printf("%s [Denylist]\n", k)
 					}
 				}
 			}

@@ -182,7 +182,7 @@ var listCmd = &cobra.Command{
 						fmt.Fprintf(w, "%s\tGlobal\t\n", tagName)
 					}
 				} else {
-					fmt.Printf("  - %s\n", tagName)
+					fmt.Printf("%s\n", tagName)
 				}
 			}
 
@@ -215,7 +215,7 @@ var listCmd = &cobra.Command{
 
 			fmt.Printf("Exclusion Index (Denylist) em '%s':\n", tagName)
 			for path := range ignoredMap {
-				fmt.Printf("  - %s\n", path)
+				fmt.Printf("%s\n", path)
 			}
 			return nil
 		}
@@ -261,7 +261,7 @@ var listCmd = &cobra.Command{
 
 		if listAbsolute {
 			for _, f := range files {
-				fmt.Printf("  - %s\n", f)
+				fmt.Printf("%s\n", f)
 			}
 			return nil
 		}
@@ -284,7 +284,7 @@ var listCmd = &cobra.Command{
 				if relPath == "" {
 					relPath = filepath.Base(f)
 				}
-				fmt.Printf("  - %s\n", relPath)
+				fmt.Printf("%s\n", relPath)
 			}
 		}
 		return nil
