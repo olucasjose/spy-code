@@ -21,14 +21,16 @@ type Model struct {
 
 	TrackedMap map[string]bool
 	IgnoredMap map[string]bool
+	DirSizes   map[string]int64
 }
 
 // InitialModel inicializa a máquina injetando o contexto do banco de dados
 func InitialModel(tagName, baseRoot string, trackedMap, ignoredMap map[string]bool) Model {
 	root := NewRootNode(baseRoot)
-	
-	// Carrega apenas o primeiro nível (Lazy Loading)
-	_ = root.LoadChildren(baseRoot, trackedMap, ignoredMap)
+	dirSizes := make(map[string]int64)
+
+	// Carrega apenas o primeiro nível (Lazy Loading) passando o cache de tamanhos
+	_ = root.LoadChildren(baseRoot, trackedMap, ignoredMap, dirSizes)
 
 	return Model{
 		TagName:    tagName,
@@ -37,6 +39,7 @@ func InitialModel(tagName, baseRoot string, trackedMap, ignoredMap map[string]bo
 		CurrentDir: root,
 		TrackedMap: trackedMap,
 		IgnoredMap: ignoredMap,
+		DirSizes:   dirSizes,
 	}
 }
 

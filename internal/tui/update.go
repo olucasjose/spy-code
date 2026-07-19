@@ -13,6 +13,15 @@ import (
 // Update é a malha assíncrona de interceptação de inputs e mutação de estado
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case dirSizesMsg:
+		// Mescla o cache local calculado pela goroutine no cache global
+		for k, v := range msg {
+			m.DirSizes[k] = v
+		}
+		// Força a atualização da árvore visual que já está carregada na memória
+		m.updateLoadedSizes(m.Root)
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.PromptingExit {
 			return m.handlePromptKeys(msg)
@@ -23,6 +32,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+// updateLoadedSizes caminha pela árvore alocada e aplica os novos tamanhos do cache global
+func (m *Model) updateLoadedSizes(n *Node) {
+	if n.IsDir {
+		if size, exists := m.DirSizes[n.AbsPath]; exists {
+			n.Size = size
+			n.SizeCalculated = true
+		}
+	}
+	if n.IsLoaded {
+		for _, child := range n.Children {
+			m.updateLoadedSizes(child)
+		}
+	}
 }
 
 func (m Model) handlePromptKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -85,8 +109,7 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if childrenCount > 0 {
 			selected := m.CurrentDir.Children[m.CursorIndex]
 			if selected.IsDir {
-				// Continua o Lazy Loading propagando o cache do banco
-				_ = selected.LoadChildren(m.BaseRoot, m.TrackedMap, m.IgnoredMap)
+				_ = selected.LoadChildren(m.BaseRoot, m.TrackedMap, m.IgnoredMap, m.DirSizes)
 				m.CurrentDir = selected
 				m.CursorIndex = 0
 			}
@@ -100,6 +123,13 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if childrenCount > 0 {
 			m.CurrentDir.Children[m.CursorIndex].ToggleState(StateIgnored)
 			m.UnsavedChanges = true
+		}
+	case "c", "C":
+		if childrenCount > 0 {
+			selected := m.CurrentDir.Children[m.CursorIndex]
+			if selected.IsDir && !selected.SizeCalculated {
+				return m, calculateDirSizeCmd(selected.AbsPath)
+			}
 		}
 	}
 

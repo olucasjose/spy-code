@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dustin/go-humanize"
 )
 
 var (
@@ -18,6 +19,7 @@ var (
 	untrackedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	headerStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("227")).Bold(true).MarginBottom(1)
 	footerStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).MarginTop(1)
+	sizeStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Align(lipgloss.Right)
 	promptStyle    = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("196")).
@@ -63,13 +65,19 @@ func (m Model) View() string {
 			stateMarker = ignoredStyle.Render("[I]")
 		}
 
-		s.WriteString(fmt.Sprintf("%s%s %s\n", cursor, stateMarker, name))
+		sizeStr := "[?]"
+		if child.SizeCalculated {
+			sizeStr = humanize.Bytes(uint64(child.Size))
+		}
+		formattedSize := sizeStyle.Render(fmt.Sprintf("%10s", sizeStr))
+
+		s.WriteString(fmt.Sprintf("%s%s %s %s\n", cursor, stateMarker, formattedSize, name))
 	}
 
 	if m.PromptingExit {
 		s.WriteString(promptStyle.Render("⚠ ALTERAÇÕES NÃO SALVAS DETECTADAS!\nDeseja salvar antes de sair? [s] Sim / [n] Não / [esc] Cancelar"))
 	} else {
-		help := "↑/↓: Mover • →: Entrar • ←: Voltar • Espaço: Rastrear (T) • i: Denylist (I) • Ctrl+s: Salvar • Ctrl+q: Sair"
+		help := "↑/↓: Mover • →: Entrar • ←: Voltar • Espaço: Rastrear (T) • i: Denylist (I) • c: Calcular Peso • Ctrl+s: Salvar • Ctrl+q: Sair"
 		if m.UnsavedChanges {
 			help += lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(" (Alterações Pendentes)")
 		}
