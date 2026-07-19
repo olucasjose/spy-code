@@ -14,7 +14,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:           "tae",
-	Version:       "7.10.1",
+	Version:       "7.10.2",
 	Short:         "Tae é um utilitário CLI para extração e empacotamento de código",
 	SilenceErrors: true,
 	SilenceUsage:  true,

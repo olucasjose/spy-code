@@ -67,7 +67,7 @@ func (n *Node) LoadChildren(baseRoot string, trackedMap, ignoredMap map[string]b
 			Path:    relPath,
 			IsDir:   entry.IsDir(),
 			Parent:  n,
-			State:   n.State,
+			State:   StateUntracked,
 		}
 
 		if trackedMap[relPath] {
@@ -105,18 +105,6 @@ func (n *Node) ToggleState(newState NodeState) {
 		}
 	} else {
 		n.State = newState
-	}
-
-	n.propagateStateToLoadedChildren()
-}
-
-func (n *Node) propagateStateToLoadedChildren() {
-	if !n.IsLoaded {
-		return
-	}
-	for _, child := range n.Children {
-		child.State = n.State
-		child.propagateStateToLoadedChildren()
 	}
 }
 
