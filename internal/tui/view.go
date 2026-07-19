@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Lucas José de Lima Silva
+
+package tui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+var (
+	cursorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("212")).Bold(true)
+	dirStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
+	trackedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	ignoredStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	untrackedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	headerStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("227")).Bold(true).MarginBottom(1)
+	footerStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).MarginTop(1)
+	promptStyle    = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("196")).
+			Padding(0, 1).
+			MarginTop(1).
+			Foreground(lipgloss.Color("255")).
+			Background(lipgloss.Color("52")).Bold(true)
+)
+
+// View constrói o buffer de renderização do terminal frame a frame
+func (m Model) View() string {
+	if m.Err != nil {
+		return fmt.Sprintf("Erro fatal: %v\n", m.Err)
+	}
+	if m.Quitting {
+		return ""
+	}
+
+	var s strings.Builder
+
+	s.WriteString(headerStyle.Render(fmt.Sprintf("TUI Manager | Tag: %s | Caminho: %s", m.TagName, m.CurrentDir.Path)))
+	s.WriteString("\n")
+
+	if len(m.CurrentDir.Children) == 0 {
+		s.WriteString(untrackedStyle.Render("  (Diretório vazio)\n"))
+	}
+
+	for i, child := range m.CurrentDir.Children {
+		cursor := "  "
+		if m.CursorIndex == i {
+			cursor = cursorStyle.Render("> ")
+		}
+
+		name := child.Name
+		if child.IsDir {
+			name = dirStyle.Render(name + "/")
+		}
+
+		stateMarker := untrackedStyle.Render("[ ]")
+		if child.State == StateTracked {
+			stateMarker = trackedStyle.Render("[T]")
+		} else if child.State == StateIgnored {
+			stateMarker = ignoredStyle.Render("[I]")
+		}
+
+		s.WriteString(fmt.Sprintf("%s%s %s\n", cursor, stateMarker, name))
+	}
+
+	if m.PromptingExit {
+		s.WriteString(promptStyle.Render("⚠ ALTERAÇÕES NÃO SALVAS DETECTADAS!\nDeseja salvar antes de sair? [s] Sim / [n] Não / [esc] Cancelar"))
+	} else {
+		help := "↑/↓: Mover • →: Entrar • ←: Voltar • Espaço: Rastrear (T) • i: Denylist (I) • Ctrl+s: Salvar • Ctrl+q: Sair"
+		if m.UnsavedChanges {
+			help += lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(" (Alterações Pendentes)")
+		}
+		s.WriteString(footerStyle.Render(help))
+	}
+
+	return s.String()
+}
