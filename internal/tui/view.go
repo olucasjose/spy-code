@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/dustin/go-humanize"
 )
 
 var (
@@ -28,6 +27,24 @@ var (
 			Foreground(lipgloss.Color("255")).
 			Background(lipgloss.Color("52")).Bold(true)
 )
+
+func formatBytes(size int64) string {
+	if size < 1000 {
+		return fmt.Sprintf("%d B", size)
+	}
+
+	units := []string{"B", "kB", "MB", "GB", "TB", "PB"}
+	value := float64(size)
+	unitIndex := 0
+
+	for value >= 1000 && unitIndex < len(units)-1 {
+		value /= 1000.0
+		unitIndex++
+	}
+
+	return fmt.Sprintf("%.2f %s", value, units[unitIndex])
+}
+
 
 // View constrói o buffer de renderização do terminal frame a frame
 func (m Model) View() string {
@@ -67,9 +84,10 @@ func (m Model) View() string {
 
 		sizeStr := "[?]"
 		if child.SizeCalculated {
-			sizeStr = humanize.Bytes(uint64(child.Size))
+			sizeStr = formatBytes(child.Size)
 		}
-		formattedSize := sizeStyle.Render(fmt.Sprintf("%10s", sizeStr))
+		// Formatado para %11s para acomodar o crescimento da string com as casas decimais (ex: "11.35 kB")
+		formattedSize := sizeStyle.Render(fmt.Sprintf("%11s", sizeStr))
 
 		s.WriteString(fmt.Sprintf("%s%s %s %s\n", cursor, stateMarker, formattedSize, name))
 	}
