@@ -91,12 +91,7 @@ func (n *Node) LoadChildren(baseRoot string, trackedMap, ignoredMap map[string]b
 		n.Children = append(n.Children, child)
 	}
 
-	sort.Slice(n.Children, func(i, j int) bool {
-		if n.Children[i].IsDir == n.Children[j].IsDir {
-			return strings.ToLower(n.Children[i].Name) < strings.ToLower(n.Children[j].Name)
-		}
-		return n.Children[i].IsDir
-	})
+	n.SortChildren()
 
 	n.IsLoaded = true
 	return nil
@@ -140,4 +135,28 @@ func (n *Node) CollectStates(tracked, ignored *[]string) {
 			child.CollectStates(tracked, ignored)
 		}
 	}
+}
+
+// SortChildren aplica as regras de negócio em cascata para ordenação visual
+func (n *Node) SortChildren() {
+	sort.Slice(n.Children, func(i, j int) bool {
+		a := n.Children[i]
+		b := n.Children[j]
+
+		// 1. Prioridade absoluta para nós que já tiveram o peso calculado
+		if a.SizeCalculated != b.SizeCalculated {
+			return a.SizeCalculated
+		}
+
+		// 2. Ordem de grandeza: decrescente por tamanho
+		if a.SizeCalculated && b.SizeCalculated && a.Size != b.Size {
+			return a.Size > b.Size
+		}
+
+		// 3. Fallback estrutural: Diretórios antes de arquivos, depois nome alfabético
+		if a.IsDir != b.IsDir {
+			return a.IsDir
+		}
+		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+	})
 }

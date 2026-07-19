@@ -36,15 +36,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateLoadedSizes caminha pela árvore alocada e aplica os novos tamanhos do cache global
 func (m *Model) updateLoadedSizes(n *Node) {
-	if n.IsDir {
+	if n.IsDir && !n.SizeCalculated {
 		if size, exists := m.DirSizes[n.AbsPath]; exists {
 			n.Size = size
 			n.SizeCalculated = true
 		}
 	}
+
 	if n.IsLoaded {
+		mutated := false
 		for _, child := range n.Children {
+			wasCalculated := child.SizeCalculated
 			m.updateLoadedSizes(child)
+			if !wasCalculated && child.SizeCalculated {
+				mutated = true
+			}
+		}
+
+		// Garante reatividade: Reordena os filhos apenas se o cache alterou o estado de algum deles
+		if mutated {
+			n.SortChildren()
 		}
 	}
 }
