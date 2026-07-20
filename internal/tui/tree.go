@@ -46,7 +46,7 @@ func NewRootNode(absRoot string) *Node {
 
 // LoadChildren escaneia o disco sob demanda (Lazy Loading).
 // Ele resolve instantaneamente o tamanho de arquivos e consulta o cache para diretórios.
-func (n *Node) LoadChildren(baseRoot string, trackedMap, ignoredMap map[string]bool, dirSizes map[string]int64) error {
+func (n *Node) LoadChildren(baseRoot string, trackedMap, ignoredMap map[string]bool, dirSizes map[string]int64, calcMode string, gitIgnoredMap map[string]bool) error {
 	if n.IsLoaded || !n.IsDir {
 		return nil
 	}
@@ -76,15 +76,27 @@ func (n *Node) LoadChildren(baseRoot string, trackedMap, ignoredMap map[string]b
 			child.State = StateIgnored
 		}
 
+		// Se for modo "filtered" e estiver na denylist ou no gitignore, não calcula automaticamente
+		isExcluded := false
+		if calcMode == "filtered" {
+			if child.State == StateIgnored || isPathGitIgnored(relPath, gitIgnoredMap) {
+				isExcluded = true
+			}
+		}
+
 		if !child.IsDir {
-			if info, err := entry.Info(); err == nil {
-				child.Size = info.Size()
-				child.SizeCalculated = true
+			if !isExcluded {
+				if info, err := entry.Info(); err == nil {
+					child.Size = info.Size()
+					child.SizeCalculated = true
+				}
 			}
 		} else {
-			if size, exists := dirSizes[child.AbsPath]; exists {
-				child.Size = size
-				child.SizeCalculated = true
+			if !isExcluded {
+				if size, exists := dirSizes[child.AbsPath]; exists {
+					child.Size = size
+					child.SizeCalculated = true
+				}
 			}
 		}
 
@@ -96,6 +108,7 @@ func (n *Node) LoadChildren(baseRoot string, trackedMap, ignoredMap map[string]b
 	n.IsLoaded = true
 	return nil
 }
+
 
 // ToggleState aplica a mutação de estado baseada no input do usuário
 func (n *Node) ToggleState(newState NodeState) {

@@ -223,3 +223,26 @@ func GetCommitInfo(target string) (hash string, subject string, err error) {
 
 	return lines[0], lines[1], nil
 }
+
+// GetIgnoredPaths retorna um mapa de caminhos ignorados pelo gitignore.
+// Os caminhos no mapa estarão em formato Slash e sem barra no final.
+func GetIgnoredPaths(gitRoot string) (map[string]bool, error) {
+	cmd := exec.Command("git", "ls-files", "-o", "-i", "--exclude-standard", "--directory")
+	cmd.Dir = gitRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	ignored := make(map[string]bool)
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			normalized := filepath.ToSlash(strings.TrimSuffix(line, "/"))
+			ignored[normalized] = true
+		}
+	}
+	return ignored, nil
+}
+

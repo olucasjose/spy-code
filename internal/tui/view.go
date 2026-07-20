@@ -54,10 +54,18 @@ func (m Model) View() string {
 	if m.Quitting {
 		return ""
 	}
+	if m.Calculating {
+		var s strings.Builder
+		s.WriteString(headerStyle.Render(fmt.Sprintf("TUI Manager | Tag: %s | Caminho: %s", m.TagName, m.CurrentDir.Path)))
+		s.WriteString("\n\n  Aguardando cálculo de tamanhos...\n\n")
+		s.WriteString(footerStyle.Render("Ctrl+c / Ctrl+q: Cancelar e Sair"))
+		return s.String()
+	}
 
 	var s strings.Builder
 
 	s.WriteString(headerStyle.Render(fmt.Sprintf("TUI Manager | Tag: %s | Caminho: %s", m.TagName, m.CurrentDir.Path)))
+
 	s.WriteString("\n")
 
 	if len(m.CurrentDir.Children) == 0 {

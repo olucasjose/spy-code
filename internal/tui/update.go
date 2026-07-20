@@ -4,6 +4,7 @@
 package tui
 
 import (
+	"os"
 	"strings"
 	"tae/internal/storage"
 
@@ -20,9 +21,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Força a atualização da árvore visual que já está carregada na memória
 		m.updateLoadedSizes(m.Root)
+		m.Calculating = false
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.Calculating {
+			if msg.String() == "ctrl+c" || msg.String() == "ctrl+q" {
+				m.Quitting = true
+				return m, tea.Quit
+			}
+			return m, nil
+		}
 		if m.PromptingExit {
 			return m.handlePromptKeys(msg)
 		}
@@ -120,7 +129,7 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if childrenCount > 0 {
 			selected := m.CurrentDir.Children[m.CursorIndex]
 			if selected.IsDir {
-				_ = selected.LoadChildren(m.BaseRoot, m.TrackedMap, m.IgnoredMap, m.DirSizes)
+				_ = selected.LoadChildren(m.BaseRoot, m.TrackedMap, m.IgnoredMap, m.DirSizes, m.CalcMode, m.GitIgnoredMap)
 				m.CurrentDir = selected
 				m.CursorIndex = 0
 			}
@@ -138,14 +147,24 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c", "C":
 		if childrenCount > 0 {
 			selected := m.CurrentDir.Children[m.CursorIndex]
-			if selected.IsDir && !selected.SizeCalculated {
-				return m, calculateDirSizeCmd(selected.AbsPath)
+			if !selected.SizeCalculated {
+				if selected.IsDir {
+					return m, calculateDirSizeCmd(selected.AbsPath)
+				} else {
+					if info, err := os.Stat(selected.AbsPath); err == nil {
+						selected.Size = info.Size()
+						selected.SizeCalculated = true
+						m.CurrentDir.SortChildren()
+					}
+					return m, nil
+				}
 			}
 		}
 	}
 
 	return m, nil
 }
+
 
 // saveState compila a árvore virtual com as chaves intocadas do banco (Resolução Plana)
 func (m Model) saveState() error {

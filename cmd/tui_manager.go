@@ -12,10 +12,13 @@ import (
 	"tae/internal/fs"
 	"tae/internal/storage"
 	"tae/internal/tui"
+	"tae/internal/vcs"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
+
+var tuiSizeMode string
 
 var tuiManagerCmd = &cobra.Command{
 	Use:   "tui-manager <tag>",
@@ -26,6 +29,10 @@ var tuiManagerCmd = &cobra.Command{
 		return tags, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if tuiSizeMode != "default" && tuiSizeMode != "all-files" && tuiSizeMode != "filtered" {
+			return fmt.Errorf("valor inválido para --size-mode: '%s'. Valores aceitos: default, all-files, filtered", tuiSizeMode)
+		}
+
 		tagName := args[0]
 
 		meta, err := storage.GetTagMeta(tagName)
@@ -50,6 +57,17 @@ var tuiManagerCmd = &cobra.Command{
 			baseRoot = cwd
 		}
 
+		var gitIgnoredMap map[string]bool
+		if meta.Type == storage.TagTypeGit {
+			var err error
+			gitIgnoredMap, err = vcs.GetIgnoredPaths(baseRoot)
+			if err != nil {
+				gitIgnoredMap = make(map[string]bool)
+			}
+		} else {
+			gitIgnoredMap = make(map[string]bool)
+		}
+
 		rawFiles, rawIgnored, err := storage.GetTagRawKeys(tagName)
 		if err != nil {
 			return fmt.Errorf("erro ao extrair estado atual do banco: %w", err)
@@ -65,7 +83,7 @@ var tuiManagerCmd = &cobra.Command{
 			ignoredMap[filepath.ToSlash(p)] = true
 		}
 
-		model := tui.InitialModel(tagName, baseRoot, trackedMap, ignoredMap)
+		model := tui.InitialModel(tagName, baseRoot, trackedMap, ignoredMap, tuiSizeMode, gitIgnoredMap)
 		
 		p := tea.NewProgram(model, tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
@@ -77,5 +95,7 @@ var tuiManagerCmd = &cobra.Command{
 }
 
 func init() {
+	tuiManagerCmd.Flags().StringVarP(&tuiSizeMode, "size-mode", "s", "default", "Modo de cálculo de tamanho (default, all-files, filtered)")
 	rootCmd.AddCommand(tuiManagerCmd)
 }
+
