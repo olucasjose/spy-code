@@ -14,7 +14,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:           "tae",
-	Version:       "7.10.2",
+	Version:       "7.10.3",
 	Short:         "Tae é um utilitário CLI para extração e empacotamento de código",
 	SilenceErrors: true,
 	SilenceUsage:  true,
@@ -62,7 +62,8 @@ Exemplo Termux (Android):
 }
 
 func init() {
-	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.CompletionOptions.DisableDefaultCmd = false
+	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
 	rootCmd.SetUsageTemplate(`Uso:{{if .Runnable}}
   {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
