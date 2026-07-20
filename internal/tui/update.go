@@ -32,6 +32,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.ShowHelp {
+			return m.handleHelpKeys(msg)
+		}
 		if m.PromptingExit {
 			return m.handlePromptKeys(msg)
 		}
@@ -87,6 +90,26 @@ func (m Model) handlePromptKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleHelpKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "?", "esc":
+		m.ShowHelp = false
+		return m, nil
+	case "q":
+		if m.UnsavedChanges {
+			m.PromptingExit = true
+			m.ShowHelp = false
+			return m, nil
+		}
+		m.Quitting = true
+		return m, tea.Quit
+	case "ctrl+c":
+		m.Quitting = true
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
 func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	childrenCount := len(m.CurrentDir.Children)
 
@@ -94,6 +117,10 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		m.Quitting = true
 		return m, tea.Quit
+
+	case "?":
+		m.ShowHelp = true
+		return m, nil
 
 	case "q":
 		if m.UnsavedChanges {

@@ -25,6 +25,7 @@ type Model struct {
 	CalcMode      string
 	GitIgnoredMap map[string]bool
 	Calculating   bool
+	ShowHelp      bool
 }
 
 // InitialModel inicializa a máquina injetando o contexto do banco de dados

@@ -61,6 +61,23 @@ func (m Model) View() string {
 		s.WriteString(footerStyle.Render("Ctrl+c / q: Cancelar e Sair"))
 		return s.String()
 	}
+	if m.ShowHelp {
+		var s strings.Builder
+		s.WriteString(headerStyle.Render(fmt.Sprintf("TUI Manager | Tag: %s | Ajuda", m.TagName)))
+		s.WriteString("\n\n")
+		s.WriteString("  Atalhos do Teclado:\n")
+		s.WriteString("  ↑/↓    : Mover cursor para cima/baixo\n")
+		s.WriteString("  →      : Entrar no diretório selecionado\n")
+		s.WriteString("  ←      : Voltar para o diretório pai\n")
+		s.WriteString("  Espaço : Alternar estado de Rastreamento (T)\n")
+		s.WriteString("  i / I  : Alternar estado de Denylist (I)\n")
+		s.WriteString("  c / C  : Calcular tamanho da pasta/arquivo selecionado\n")
+		s.WriteString("  Ctrl+s : Salvar alterações no banco de dados\n")
+		s.WriteString("  q      : Sair\n")
+		s.WriteString("  ?      : Fechar este menu de ajuda\n\n")
+		s.WriteString(footerStyle.Render("Pressione ? ou esc para voltar"))
+		return s.String()
+	}
 
 	var s strings.Builder
 
@@ -103,7 +120,7 @@ func (m Model) View() string {
 	if m.PromptingExit {
 		s.WriteString(promptStyle.Render("⚠ ALTERAÇÕES NÃO SALVAS DETECTADAS!\nDeseja salvar antes de sair? [s] Sim / [n] Não / [esc] Cancelar"))
 	} else {
-		help := "↑/↓: Mover • →: Entrar • ←: Voltar • Espaço: Rastrear (T) • i: Denylist (I) • c: Calcular Peso • Ctrl+s: Salvar • q: Sair"
+		help := "Pressione ? para ajuda • q: Sair"
 		if m.UnsavedChanges {
 			help += lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(" (Alterações Pendentes)")
 		}
