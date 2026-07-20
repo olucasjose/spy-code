@@ -81,15 +81,32 @@ func (m Model) View() string {
 
 	var s strings.Builder
 
-	s.WriteString(headerStyle.Render(fmt.Sprintf("TUI Manager | Tag: %s | Caminho: %s", m.TagName, m.CurrentDir.Path)))
+	m.AdjustScroll()
 
+	visibleHeight := m.TerminalHeight - 5
+	if visibleHeight <= 0 {
+		visibleHeight = 1
+	}
+	childrenCount := len(m.CurrentDir.Children)
+	endIndex := m.ScrollOffset + visibleHeight
+	if endIndex > childrenCount {
+		endIndex = childrenCount
+	}
+
+	headerText := fmt.Sprintf("TUI Manager | Tag: %s | Caminho: %s", m.TagName, m.CurrentDir.Path)
+	if childrenCount > visibleHeight {
+		headerText += fmt.Sprintf(" (Itens %d-%d de %d)", m.ScrollOffset+1, endIndex, childrenCount)
+	}
+
+	s.WriteString(headerStyle.Render(headerText))
 	s.WriteString("\n")
 
-	if len(m.CurrentDir.Children) == 0 {
+	if childrenCount == 0 {
 		s.WriteString(untrackedStyle.Render("  (Diretório vazio)\n"))
 	}
 
-	for i, child := range m.CurrentDir.Children {
+	for i := m.ScrollOffset; i < endIndex; i++ {
+		child := m.CurrentDir.Children[i]
 		cursor := "  "
 		if m.CursorIndex == i {
 			cursor = cursorStyle.Render("> ")

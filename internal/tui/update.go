@@ -24,6 +24,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Calculating = false
 		return m, nil
 
+	case tea.WindowSizeMsg:
+		m.TerminalHeight = msg.Height
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.Calculating {
 			if msg.String() == "ctrl+c" || msg.String() == "q" {
@@ -44,7 +48,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.Type == tea.MouseLeft {
-			clickIndex := msg.Y - 2
+			clickIndex := msg.Y - 2 + m.ScrollOffset
 			childrenCount := len(m.CurrentDir.Children)
 			if clickIndex >= 0 && clickIndex < childrenCount {
 				m.CursorIndex = clickIndex
@@ -172,6 +176,7 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.CurrentDir.Parent != nil {
 			m.CurrentDir = m.CurrentDir.Parent
 			m.CursorIndex = 0
+			m.ScrollOffset = 0
 		}
 	case "right":
 		if childrenCount > 0 {
@@ -180,6 +185,7 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				_ = selected.LoadChildren(m.BaseRoot, m.TrackedMap, m.IgnoredMap, m.DirSizes, m.CalcMode, m.GitIgnoredMap)
 				m.CurrentDir = selected
 				m.CursorIndex = 0
+				m.ScrollOffset = 0
 			}
 		}
 	case " ":
