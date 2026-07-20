@@ -114,7 +114,14 @@ func (m Model) View() string {
 		// Formatado para %11s para acomodar o crescimento da string com as casas decimais (ex: "11.35 kB")
 		formattedSize := sizeStyle.Render(fmt.Sprintf("%11s", sizeStr))
 
-		s.WriteString(fmt.Sprintf("%s%s %s %s\n", cursor, stateMarker, formattedSize, name))
+		line := fmt.Sprintf("%s%s %s %s", cursor, stateMarker, formattedSize, name)
+		if m.CursorIndex == i {
+			bgStyle := lipgloss.NewStyle().Background(lipgloss.Color("236"))
+			line = bgStyle.Render(line)
+			bgCode := strings.TrimSuffix(bgStyle.Render(""), "\x1b[0m")
+			line = strings.ReplaceAll(line, "\x1b[0m", "\x1b[0m"+bgCode) + "\x1b[0m"
+		}
+		s.WriteString(line + "\n")
 	}
 
 	if m.PromptingExit {
