@@ -58,7 +58,7 @@ func (m Model) View() string {
 		var s strings.Builder
 		s.WriteString(headerStyle.Render(fmt.Sprintf("TUI Manager | Tag: %s | Caminho: %s", m.TagName, m.CurrentDir.Path)))
 		s.WriteString("\n\n  Aguardando cálculo de tamanhos...\n\n")
-		s.WriteString(footerStyle.Render("Ctrl+c / Ctrl+q: Cancelar e Sair"))
+		s.WriteString(footerStyle.Render("Ctrl+c / q: Cancelar e Sair"))
 		return s.String()
 	}
 
@@ -103,7 +103,7 @@ func (m Model) View() string {
 	if m.PromptingExit {
 		s.WriteString(promptStyle.Render("⚠ ALTERAÇÕES NÃO SALVAS DETECTADAS!\nDeseja salvar antes de sair? [s] Sim / [n] Não / [esc] Cancelar"))
 	} else {
-		help := "↑/↓: Mover • →: Entrar • ←: Voltar • Espaço: Rastrear (T) • i: Denylist (I) • c: Calcular Peso • Ctrl+s: Salvar • Ctrl+q: Sair"
+		help := "↑/↓: Mover • →: Entrar • ←: Voltar • Espaço: Rastrear (T) • i: Denylist (I) • c: Calcular Peso • Ctrl+s: Salvar • q: Sair"
 		if m.UnsavedChanges {
 			help += lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(" (Alterações Pendentes)")
 		}

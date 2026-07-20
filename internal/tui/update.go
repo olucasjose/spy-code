@@ -26,7 +26,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.Calculating {
-			if msg.String() == "ctrl+c" || msg.String() == "ctrl+q" {
+			if msg.String() == "ctrl+c" || msg.String() == "q" {
 				m.Quitting = true
 				return m, tea.Quit
 			}
@@ -95,7 +95,7 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.Quitting = true
 		return m, tea.Quit
 
-	case "ctrl+q":
+	case "q":
 		if m.UnsavedChanges {
 			m.PromptingExit = true
 			return m, nil
