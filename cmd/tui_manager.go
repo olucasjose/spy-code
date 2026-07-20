@@ -85,7 +85,7 @@ var tuiManagerCmd = &cobra.Command{
 
 		model := tui.InitialModel(tagName, baseRoot, trackedMap, ignoredMap, tuiSizeMode, gitIgnoredMap)
 		
-		p := tea.NewProgram(model, tea.WithAltScreen())
+		p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 		if _, err := p.Run(); err != nil {
 			return fmt.Errorf("a malha de execução do TUI foi abortada: %w", err)
 		}

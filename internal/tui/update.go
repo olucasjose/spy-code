@@ -39,6 +39,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handlePromptKeys(msg)
 		}
 		return m.handleNavKeys(msg)
+	case tea.MouseMsg:
+		if m.Calculating || m.ShowHelp || m.PromptingExit {
+			return m, nil
+		}
+		if msg.Type == tea.MouseLeft {
+			clickIndex := msg.Y - 2
+			childrenCount := len(m.CurrentDir.Children)
+			if clickIndex >= 0 && clickIndex < childrenCount {
+				m.CursorIndex = clickIndex
+			}
+		}
+		return m, nil
+
 	case error:
 		m.Err = msg
 		return m, tea.Quit
