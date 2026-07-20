@@ -140,12 +140,20 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "up":
-		if m.CursorIndex > 0 {
-			m.CursorIndex--
+		if childrenCount > 0 {
+			if m.CursorIndex > 0 {
+				m.CursorIndex--
+			} else {
+				m.CursorIndex = childrenCount - 1
+			}
 		}
 	case "down":
-		if m.CursorIndex < childrenCount-1 {
-			m.CursorIndex++
+		if childrenCount > 0 {
+			if m.CursorIndex < childrenCount-1 {
+				m.CursorIndex++
+			} else {
+				m.CursorIndex = 0
+			}
 		}
 	case "left":
 		if m.CurrentDir.Parent != nil {
