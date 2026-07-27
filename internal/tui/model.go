@@ -24,21 +24,22 @@ type Model struct {
 	DirSizes      map[string]int64
 	CalcMode      string
 	GitIgnoredMap map[string]bool
-	Calculating    bool
+	ExcludeBinary bool
+	Calculating   bool
 	ShowHelp       bool
 	TerminalHeight int
 	ScrollOffset   int
 }
 
 // InitialModel inicializa a máquina injetando o contexto do banco de dados
-func InitialModel(tagName, baseRoot string, trackedMap, ignoredMap map[string]bool, calcMode string, gitIgnoredMap map[string]bool) Model {
+func InitialModel(tagName, baseRoot string, trackedMap, ignoredMap map[string]bool, calcMode string, gitIgnoredMap map[string]bool, excludeBinary bool) Model {
 	root := NewRootNode(baseRoot)
 	dirSizes := make(map[string]int64)
 
 	calculating := (calcMode == "all-files" || calcMode == "filtered")
 
 	// Carrega apenas o primeiro nível (Lazy Loading) passando o cache de tamanhos e regras de cálculo
-	_ = root.LoadChildren(baseRoot, trackedMap, ignoredMap, dirSizes, calcMode, gitIgnoredMap)
+	_ = root.LoadChildren(baseRoot, trackedMap, ignoredMap, dirSizes, calcMode, gitIgnoredMap, excludeBinary)
 
 	return Model{
 		TagName:        tagName,
@@ -50,6 +51,7 @@ func InitialModel(tagName, baseRoot string, trackedMap, ignoredMap map[string]bo
 		DirSizes:       dirSizes,
 		CalcMode:       calcMode,
 		GitIgnoredMap:  gitIgnoredMap,
+		ExcludeBinary:  excludeBinary,
 		Calculating:    calculating,
 		TerminalHeight: 25,
 	}
@@ -58,7 +60,7 @@ func InitialModel(tagName, baseRoot string, trackedMap, ignoredMap map[string]bo
 // Init cumpre a interface do Bubble Tea
 func (m Model) Init() tea.Cmd {
 	if m.Calculating {
-		return calculateAllSizesCmd(m.BaseRoot, m.CalcMode, m.IgnoredMap, m.GitIgnoredMap)
+		return calculateAllSizesCmd(m.BaseRoot, m.CalcMode, m.IgnoredMap, m.GitIgnoredMap, m.ExcludeBinary)
 	}
 	return nil
 }

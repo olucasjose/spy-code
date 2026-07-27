@@ -182,7 +182,7 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if childrenCount > 0 {
 			selected := m.CurrentDir.Children[m.CursorIndex]
 			if selected.IsDir {
-				_ = selected.LoadChildren(m.BaseRoot, m.TrackedMap, m.IgnoredMap, m.DirSizes, m.CalcMode, m.GitIgnoredMap)
+				_ = selected.LoadChildren(m.BaseRoot, m.TrackedMap, m.IgnoredMap, m.DirSizes, m.CalcMode, m.GitIgnoredMap, m.ExcludeBinary)
 				m.CurrentDir = selected
 				m.CursorIndex = 0
 				m.ScrollOffset = 0

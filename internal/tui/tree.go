@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"tae/internal/filter"
 )
 
 type NodeState int
@@ -46,7 +48,7 @@ func NewRootNode(absRoot string) *Node {
 
 // LoadChildren escaneia o disco sob demanda (Lazy Loading).
 // Ele resolve instantaneamente o tamanho de arquivos e consulta o cache para diretórios.
-func (n *Node) LoadChildren(baseRoot string, trackedMap, ignoredMap map[string]bool, dirSizes map[string]int64, calcMode string, gitIgnoredMap map[string]bool) error {
+func (n *Node) LoadChildren(baseRoot string, trackedMap, ignoredMap map[string]bool, dirSizes map[string]int64, calcMode string, gitIgnoredMap map[string]bool, excludeBinary bool) error {
 	if n.IsLoaded || !n.IsDir {
 		return nil
 	}
@@ -68,6 +70,13 @@ func (n *Node) LoadChildren(baseRoot string, trackedMap, ignoredMap map[string]b
 			IsDir:   entry.IsDir(),
 			Parent:  n,
 			State:   StateUntracked,
+		}
+
+		if excludeBinary && !child.IsDir {
+			isBin, _ := filter.IsBinaryFile(childAbs)
+			if isBin {
+				continue
+			}
 		}
 
 		if trackedMap[relPath] {

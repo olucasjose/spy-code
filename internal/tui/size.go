@@ -71,8 +71,7 @@ func isPathGitIgnored(relPath string, gitIgnoredMap map[string]bool) bool {
 	return false
 }
 
-// calculateAllSizesCmd calcula os tamanhos de todos os subdiretórios a partir de baseRoot em background.
-func calculateAllSizesCmd(baseRoot string, calcMode string, ignoredMap map[string]bool, gitIgnoredMap map[string]bool) tea.Cmd {
+func calculateAllSizesCmd(baseRoot string, calcMode string, ignoredMap map[string]bool, gitIgnoredMap map[string]bool, excludeBinary bool) tea.Cmd {
 	return func() tea.Msg {
 		sizes := make(map[string]int64)
 
@@ -107,6 +106,13 @@ func calculateAllSizesCmd(baseRoot string, calcMode string, ignoredMap map[strin
 
 			if d.IsDir() {
 				return nil
+			}
+
+			if excludeBinary {
+				isBin, _ := filter.IsBinaryFile(path)
+				if isBin {
+					return nil
+				}
 			}
 
 			info, err := d.Info()

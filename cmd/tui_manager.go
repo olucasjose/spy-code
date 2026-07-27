@@ -19,6 +19,7 @@ import (
 )
 
 var tuiSizeMode string
+var tuiNoBinary bool
 
 var tuiManagerCmd = &cobra.Command{
 	Use:   "tui-manager <tag>",
@@ -83,7 +84,7 @@ var tuiManagerCmd = &cobra.Command{
 			ignoredMap[filepath.ToSlash(p)] = true
 		}
 
-		model := tui.InitialModel(tagName, baseRoot, trackedMap, ignoredMap, tuiSizeMode, gitIgnoredMap)
+		model := tui.InitialModel(tagName, baseRoot, trackedMap, ignoredMap, tuiSizeMode, gitIgnoredMap, tuiNoBinary)
 		
 		p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 		if _, err := p.Run(); err != nil {
@@ -96,6 +97,7 @@ var tuiManagerCmd = &cobra.Command{
 
 func init() {
 	tuiManagerCmd.Flags().StringVarP(&tuiSizeMode, "size-mode", "s", "all-files", "Modo de cálculo de tamanho (all-files, filtered, only-files)")
+	tuiManagerCmd.Flags().BoolVar(&tuiNoBinary, "no-binary", false, "Ocultar arquivos binários da interface e não os contabilizar no peso")
 	rootCmd.AddCommand(tuiManagerCmd)
 }
 
