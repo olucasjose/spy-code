@@ -29,8 +29,8 @@ var tuiManagerCmd = &cobra.Command{
 		return tags, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if tuiSizeMode != "default" && tuiSizeMode != "all-files" && tuiSizeMode != "filtered" {
-			return fmt.Errorf("valor inválido para --size-mode: '%s'. Valores aceitos: default, all-files, filtered", tuiSizeMode)
+		if tuiSizeMode != "only-files" && tuiSizeMode != "all-files" && tuiSizeMode != "filtered" {
+			return fmt.Errorf("valor inválido para --size-mode: '%s'. Valores aceitos: only-files, all-files, filtered", tuiSizeMode)
 		}
 
 		tagName := args[0]
@@ -95,7 +95,7 @@ var tuiManagerCmd = &cobra.Command{
 }
 
 func init() {
-	tuiManagerCmd.Flags().StringVarP(&tuiSizeMode, "size-mode", "s", "default", "Modo de cálculo de tamanho (default, all-files, filtered)")
+	tuiManagerCmd.Flags().StringVarP(&tuiSizeMode, "size-mode", "s", "all-files", "Modo de cálculo de tamanho (all-files, filtered, only-files)")
 	rootCmd.AddCommand(tuiManagerCmd)
 }
 
