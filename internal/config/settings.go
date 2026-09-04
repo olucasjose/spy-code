@@ -13,7 +13,8 @@ import (
 
 // AppSettings mapeia as configurações globais do usuário no disco
 type AppSettings struct {
-	Editor string `json:"editor"`
+	Editor          string   `json:"editor"`
+	StatsIgnoreDirs []string `json:"stats_ignore_dirs"`
 }
 
 func getSettingsPath() (string, error) {
@@ -42,6 +43,7 @@ func LoadSettings() (*AppSettings, error) {
 	// Verifica se o arquivo existe; se não, faz o bootstrap
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		cfg.Editor = "" // Mantemos vazio para permitir fallback dinâmico ($VISUAL/$EDITOR) se o usuário não preencher
+		cfg.StatsIgnoreDirs = []string{".git", "node_modules"}
 
 		data, err := json.MarshalIndent(cfg, "", "  ")
 		if err != nil {
@@ -60,6 +62,15 @@ func LoadSettings() (*AppSettings, error) {
 
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("JSON inválido no arquivo ~/.tae/config.json: %w", err)
+	}
+
+	// Retrocompatibilidade para arquivos antigos que não possuem o campo StatsIgnoreDirs
+	if cfg.StatsIgnoreDirs == nil {
+		cfg.StatsIgnoreDirs = []string{".git", "node_modules"}
+		
+		// Opcional: Re-escrever o arquivo com os defaults aplicados
+		updatedData, _ := json.MarshalIndent(cfg, "", "  ")
+		os.WriteFile(path, updatedData, 0644)
 	}
 
 	return cfg, nil

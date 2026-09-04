@@ -14,6 +14,11 @@ import (
 // Update é a malha assíncrona de interceptação de inputs e mutação de estado
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case statsMsg:
+		m.StatsData = msg.Data
+		m.CalculatingStats = false
+		return m, nil
+
 	case dirSizesMsg:
 		// Mescla o cache local calculado pela goroutine no cache global
 		for k, v := range msg {
@@ -29,7 +34,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.Calculating {
+		if m.Calculating || m.CalculatingStats {
 			if msg.String() == "ctrl+c" || msg.String() == "q" {
 				m.Quitting = true
 				return m, tea.Quit
@@ -44,7 +49,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.handleNavKeys(msg)
 	case tea.MouseMsg:
-		if m.Calculating || m.ShowHelp || m.PromptingExit {
+		if m.Calculating || m.CalculatingStats || m.ShowHelp || m.PromptingExit {
 			return m, nil
 		}
 		if msg.Type == tea.MouseLeft {
@@ -146,6 +151,14 @@ func (m Model) handleNavKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.Quitting = true
 		return m, tea.Quit
+
+	case "alt+e":
+		m.StatsEnabled = !m.StatsEnabled
+		if m.StatsEnabled && m.StatsData == nil && !m.CalculatingStats {
+			m.CalculatingStats = true
+			return m, calculateStatsCmd(m.BaseRoot, m.StatsIgnoreDirs)
+		}
+		return m, nil
 
 	case "ctrl+s":
 		if err := m.saveState(); err != nil {

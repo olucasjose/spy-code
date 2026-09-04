@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"tae/internal/config"
 	"tae/internal/fs"
 	"tae/internal/storage"
 	"tae/internal/tui"
@@ -20,6 +21,7 @@ import (
 
 var tuiSizeMode string
 var tuiNoBinary bool
+var tuiStats bool
 
 var tuiManagerCmd = &cobra.Command{
 	Use:   "tui-manager <tag>",
@@ -84,7 +86,13 @@ var tuiManagerCmd = &cobra.Command{
 			ignoredMap[filepath.ToSlash(p)] = true
 		}
 
-		model := tui.InitialModel(tagName, baseRoot, trackedMap, ignoredMap, tuiSizeMode, gitIgnoredMap, tuiNoBinary)
+		
+		cfg, _ := config.LoadSettings()
+		var statsIgnoreDirs []string
+		if cfg != nil {
+			statsIgnoreDirs = cfg.StatsIgnoreDirs
+		}
+		model := tui.InitialModel(tagName, baseRoot, trackedMap, ignoredMap, tuiSizeMode, gitIgnoredMap, tuiNoBinary, tuiStats, statsIgnoreDirs)
 		
 		p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 		if _, err := p.Run(); err != nil {
@@ -98,6 +106,7 @@ var tuiManagerCmd = &cobra.Command{
 func init() {
 	tuiManagerCmd.Flags().StringVarP(&tuiSizeMode, "size-mode", "s", "all-files", "Modo de cálculo de tamanho (all-files, filtered, only-files)")
 	tuiManagerCmd.Flags().BoolVar(&tuiNoBinary, "no-binary", false, "Ocultar arquivos binários da interface e não os contabilizar no peso")
+	tuiManagerCmd.Flags().BoolVar(&tuiStats, "stats", false, "Exibir estatísticas de quantidade de tipos de arquivos na tag")
 	rootCmd.AddCommand(tuiManagerCmd)
 }
 

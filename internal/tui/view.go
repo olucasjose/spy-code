@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"sort"
 )
 
 var (
@@ -54,10 +55,16 @@ func (m Model) View() string {
 	if m.Quitting {
 		return ""
 	}
-	if m.Calculating {
+	if m.Calculating || m.CalculatingStats {
 		var s strings.Builder
 		s.WriteString(headerStyle.Render(fmt.Sprintf("TUI Manager | Tag: %s | Caminho: %s", m.TagName, m.CurrentDir.Path)))
-		s.WriteString("\n\n  Aguardando cálculo de tamanhos...\n\n")
+		if m.Calculating && m.CalculatingStats {
+			s.WriteString("\n\n  Aguardando cálculo de tamanhos e estatísticas...\n\n")
+		} else if m.Calculating {
+			s.WriteString("\n\n  Aguardando cálculo de tamanhos...\n\n")
+		} else {
+			s.WriteString("\n\n  Aguardando cálculo de estatísticas...\n\n")
+		}
 		s.WriteString(footerStyle.Render("Ctrl+c / q: Cancelar e Sair"))
 		return s.String()
 	}
@@ -74,6 +81,7 @@ func (m Model) View() string {
 		s.WriteString("  c / C  : Calcular tamanho da pasta/arquivo selecionado\n")
 		s.WriteString("  Ctrl+s : Salvar alterações no banco de dados\n")
 		s.WriteString("  q      : Sair\n")
+		s.WriteString("  alt+e  : Mostrar/Ocultar Estatísticas\n")
 		s.WriteString("  ?      : Fechar este menu de ajuda\n\n")
 		s.WriteString(footerStyle.Render("Pressione ? ou esc para voltar"))
 		return s.String()
@@ -144,12 +152,59 @@ func (m Model) View() string {
 	if m.PromptingExit {
 		s.WriteString(promptStyle.Render("⚠ ALTERAÇÕES NÃO SALVAS DETECTADAS!\nDeseja salvar antes de sair? [s] Sim / [n] Não / [esc] Cancelar"))
 	} else {
-		help := "Pressione ? para ajuda • q: Sair"
+		help := "Pressione ? para ajuda • q: Sair • alt+e: Estatísticas"
 		if m.UnsavedChanges {
 			help += lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(" (Alterações Pendentes)")
 		}
 		s.WriteString(footerStyle.Render(help))
+
+		if m.StatsEnabled && m.StatsData != nil {
+			s.WriteString("\n\n")
+			s.WriteString(headerStyle.Render("Estatísticas da Tag"))
+			s.WriteString("\n\n")
+
+			s.WriteString(dirStyle.Render("Binários"))
+			s.WriteString("\n")
+			if len(m.StatsData.Binary) == 0 {
+				s.WriteString("  Nenhum arquivo binário\n")
+			} else {
+				for _, ec := range sortMap(m.StatsData.Binary) {
+					s.WriteString(fmt.Sprintf("  %s - %d\n", ec.Ext, ec.Count))
+				}
+			}
+			s.WriteString("\n")
+			
+			s.WriteString(dirStyle.Render("Não Binários"))
+			s.WriteString("\n")
+			if len(m.StatsData.NonBinary) == 0 {
+				s.WriteString("  Nenhum arquivo não binário\n")
+			} else {
+				for _, ec := range sortMap(m.StatsData.NonBinary) {
+					s.WriteString(fmt.Sprintf("  %s - %d\n", ec.Ext, ec.Count))
+				}
+			}
+		}
 	}
 
 	return s.String()
+}
+
+type extCount struct {
+	Ext   string
+	Count int
+}
+
+func sortMap(m map[string]int) []extCount {
+	var lst []extCount
+	for k, v := range m {
+		lst = append(lst, extCount{k, v})
+	}
+	sort.Slice(lst, func(i, j int) bool {
+		if lst[i].Count == lst[j].Count {
+			return lst[i].Ext < lst[j].Ext
+		}
+		return lst[i].Count > lst[j].Count
+	})
+	return lst
+
 }

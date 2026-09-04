@@ -29,10 +29,14 @@ type Model struct {
 	ShowHelp       bool
 	TerminalHeight int
 	ScrollOffset   int
+	StatsEnabled   bool
+	CalculatingStats bool
+	StatsData      *StatsData
+	StatsIgnoreDirs []string
 }
 
 // InitialModel inicializa a máquina injetando o contexto do banco de dados
-func InitialModel(tagName, baseRoot string, trackedMap, ignoredMap map[string]bool, calcMode string, gitIgnoredMap map[string]bool, excludeBinary bool) Model {
+func InitialModel(tagName, baseRoot string, trackedMap, ignoredMap map[string]bool, calcMode string, gitIgnoredMap map[string]bool, excludeBinary bool, statsEnabled bool, statsIgnoreDirs []string) Model {
 	root := NewRootNode(baseRoot)
 	dirSizes := make(map[string]int64)
 
@@ -53,14 +57,24 @@ func InitialModel(tagName, baseRoot string, trackedMap, ignoredMap map[string]bo
 		GitIgnoredMap:  gitIgnoredMap,
 		ExcludeBinary:  excludeBinary,
 		Calculating:    calculating,
+		StatsEnabled:   statsEnabled,
+		CalculatingStats: statsEnabled,
+		StatsIgnoreDirs: statsIgnoreDirs,
 		TerminalHeight: 25,
 	}
 }
 
 // Init cumpre a interface do Bubble Tea
 func (m Model) Init() tea.Cmd {
+	var cmds []tea.Cmd
 	if m.Calculating {
-		return calculateAllSizesCmd(m.BaseRoot, m.CalcMode, m.IgnoredMap, m.GitIgnoredMap, m.ExcludeBinary)
+		cmds = append(cmds, calculateAllSizesCmd(m.BaseRoot, m.CalcMode, m.IgnoredMap, m.GitIgnoredMap, m.ExcludeBinary))
+	}
+	if m.CalculatingStats {
+		cmds = append(cmds, calculateStatsCmd(m.BaseRoot, m.StatsIgnoreDirs))
+	}
+	if len(cmds) > 0 {
+		return tea.Batch(cmds...)
 	}
 	return nil
 }
