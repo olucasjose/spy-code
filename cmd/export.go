@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"tae/internal/exporter"
@@ -29,6 +30,7 @@ var (
 	exportTxt         bool
 	exportSingle      bool
 	exportInteractive bool
+	exportExt         []string
 )
 
 var exportCmd = &cobra.Command{
@@ -98,6 +100,28 @@ var exportCmd = &cobra.Command{
 			return fmt.Errorf("nenhum arquivo válido encontrado (possivelmente todos foram ignorados)")
 		}
 
+		if len(exportExt) > 0 {
+			filteredFiles := []string{}
+			extMap := make(map[string]bool)
+			for _, ext := range exportExt {
+				ext = strings.TrimSpace(ext)
+				if !strings.HasPrefix(ext, ".") {
+					ext = "." + ext
+				}
+				extMap[strings.ToLower(ext)] = true
+			}
+			for _, f := range files {
+				fExt := strings.ToLower(filepath.Ext(f))
+				if extMap[fExt] {
+					filteredFiles = append(filteredFiles, f)
+				}
+			}
+			files = filteredFiles
+			if len(files) == 0 {
+				return fmt.Errorf("nenhum arquivo válido encontrado após aplicar o filtro de extensão")
+			}
+		}
+
 		if err := os.MkdirAll(destPath, 0755); err != nil {
 			return fmt.Errorf("erro ao criar destino: %w", err)
 		}
@@ -158,5 +182,6 @@ func init() {
 	exportCmd.Flags().BoolVar(&exportTxt, "txt", false, "Adiciona a extensão .txt a todos os arquivos exportados")
 	exportCmd.Flags().BoolVarP(&exportSingle, "single-file", "s", false, "Exporta todos os arquivos em um único arquivo de texto plano (Single File)")
 	exportCmd.Flags().BoolVarP(&exportInteractive, "interactive", "i", false, "Habilita a aprovação interativa manual baseada em extensões na extração Single File")
+	exportCmd.Flags().StringSliceVar(&exportExt, "ext", nil, "Filtra a exportação para incluir apenas arquivos com as extensões especificadas (ex: --ext .js,.html ou --ext js,html)")
 	rootCmd.AddCommand(exportCmd)
 }
