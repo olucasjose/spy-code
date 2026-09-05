@@ -5,6 +5,7 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"tae/internal/stats"
 )
 
 // Model gerencia o estado da aplicação TUI no padrão Elm Architecture
@@ -31,7 +32,7 @@ type Model struct {
 	ScrollOffset   int
 	StatsEnabled   bool
 	CalculatingStats bool
-	StatsData      *StatsData
+	StatsData      *stats.Data
 	StatsIgnoreDirs []string
 }
 
